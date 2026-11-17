@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>PictureCut</title>
+<link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+    <div class="window" id="window">
+      <header class="toolbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>
+            </svg>
+          </span>
+          <span class="brand-name" lang="en">PictureCut</span>
+        </div>
+        <div class="doc-title" id="doc-title" lang="en">未选择图片</div>
+        <div class="tb-actions">
+          <button class="btn primary save" id="save-all" type="button" aria-label="保存参与保存的图片">
+            <ryugi-icon name="save" size="13"></ryugi-icon>
+            保存 <span id="save-count">3</span> 张
+          </button>
+        </div>
+      </header>
+
+      <aside class="sidebar">
+        <div class="side-head">
+          <span class="t">本次图片</span>
+          <span class="count" id="count">3</span>
+          <span class="side-head-spacer"></span>
+          <button class="icon-btn add" id="add-btn" type="button" aria-label="添加图片" aria-haspopup="menu" aria-expanded="false" title="添加 JPG/JPEG、PNG 图片或文件夹">
+            <span class="glyph glyph-plus" aria-hidden="true">+</span>
+          </button>
+          <div class="add-menu" id="add-menu" role="menu" aria-label="添加图片" hidden>
+            <button type="button" role="menuitem" id="add-image">打开图片…</button>
+            <button type="button" role="menuitem" id="add-folder">打开文件夹…</button>
+            <div class="add-sep" role="separator"></div>
+            <button type="button" role="menuitem" id="add-clear" class="danger">清空列表</button>
+          </div>
+        </div>
+        <div class="file-list" id="file-list" role="list" aria-label="本次图片列表"></div>
+        <div class="side-foot" id="side-foot">3 张 · 3.2 MB</div>
+      </aside>
+
+      <main class="canvas" id="canvas">
+        <div class="stage" id="stage">
+          <div class="empty" id="empty" hidden>
+            <span class="empty-mark" aria-hidden="true"><span class="glyph glyph-plus lg">+</span></span>
+            <div class="empty-title">把图片加入本次列表</div>
+            <div class="empty-sub">打开图片或文件夹。仅支持 JPG/JPEG、PNG。</div>
+            <div class="empty-actions">
+              <button class="btn outline" id="empty-open" type="button">打开图片</button>
+              <button class="btn outline" id="empty-folder" type="button">打开文件夹</button>
+            </div>
+            <div class="empty-note">移除图片不会删除源文件。</div>
+          </div>
+          <div class="photo" id="photo" style="width: 744px; height: 347px;">
+            <img id="photo-img" alt="" draggable="false" decoding="async" />
+            <div class="dim t"></div>
+            <div class="dim b"></div>
+            <div class="dim l"></div>
+            <div class="dim r"></div>
+            <div class="crop" id="crop" tabindex="0" role="group" aria-label="裁切框">
+              <div class="gl v1"></div>
+              <div class="gl v2"></div>
+              <div class="gl h1"></div>
+              <div class="gl h2"></div>
+              <button class="handle nw" type="button" data-corner="nw" aria-label="缩放裁切框左上角"><span></span></button>
+              <button class="handle ne" type="button" data-corner="ne" aria-label="缩放裁切框右上角"><span></span></button>
+              <button class="handle sw" type="button" data-corner="sw" aria-label="缩放裁切框左下角"><span></span></button>
+              <button class="handle se" type="button" data-corner="se" aria-label="缩放裁切框右下角"><span></span></button>
+            </div>
+          </div>
+        </div>
+        <div class="canvas-hint">拖动框内移动 · 拖四角缩放 · 方向键微调</div>
+      </main>
+
+      <aside class="inspector">
+        <div class="apply-row">
+          <span class="apply-title" id="apply-label">是否参与保存</span>
+          <button class="switch" id="apply-toggle" type="button" role="switch" aria-checked="true" aria-labelledby="apply-label">
+            <span></span>
+          </button>
+        </div>
+        <div class="insp-scroll">
+          <section class="sec">
+            <div class="sec-label">比例 · 当前图片</div>
+            <div class="ratio-grid" id="ratio-grid" role="radiogroup" aria-label="裁切比例"></div>
+            <div class="ratio-hint" id="ratio-hint">16:9 · 桌面壁纸</div>
+          </section>
+
+          <section class="sec">
+            <div class="sec-label">输出</div>
+            <div class="out-format" id="output-format">JPEG · 跟随原图</div>
+            <div class="out-size"><span id="crop-size">2400 × 1350</span><em id="crop-unit">px</em></div>
+            <div class="out-sub" id="out-sub">原图 2400 × 1489 · 按原始像素裁切</div>
+
+            <div class="sub-label" id="quality-label" title="标准压缩优先减小文件；高档保留更多细节，PNG 高档为无损保存">质量 · 全部图片</div>
+            <div class="seg" id="quality-seg" role="radiogroup" aria-label="输出质量">
+              <button id="quality-compressed" type="button" role="radio" aria-checked="true" title="文件较小，可能出现压缩痕迹">标准压缩</button>
+              <button id="quality-high" type="button" role="radio" aria-checked="false" title="保留更多细节，文件较大，仍会有损压缩">高质量</button>
+            </div>
+            <div class="quality-note" id="quality-note">文件较小</div>
+          </section>
+
+          <section class="sec">
+            <div class="sec-label">保存</div>
+            <label class="check">
+              <input type="checkbox" id="in-place" checked />
+              <span>与原图相同目录</span>
+            </label>
+            <div class="path">
+              <ryugi-icon name="folder" size="12"></ryugi-icon>
+              <span class="txt" id="path-text" title="原图所在目录">原图所在目录</span>
+              <input id="out-path" value="~/Desktop/裁剪输出" aria-label="输出目录" title="点击选择目录" readonly hidden />
+            </div>
+            <div class="field-label">文件名 <span class="auto-tag">自动</span></div>
+            <div class="fname-box">
+              <span class="name" id="filename" lang="en">city_16x9_q80_20261117-103842.jpg</span>
+              <button class="copy" id="copy-name" type="button" aria-label="复制文件名" title="复制文件名">
+                <ryugi-icon name="copy" size="13"></ryugi-icon>
+              </button>
+            </div>
+          </section>
+        </div>
+        <div class="insp-foot">
+          <ryugi-icon name="lock" size="12"></ryugi-icon>
+          <span>源文件不会被修改</span>
+        </div>
+      </aside>
+
+      <footer class="status">
+        <div class="status-left">
+          <ryugi-icon name="folder" size="11"></ryugi-icon>
+          <span class="txt">仅支持 JPG/JPEG、PNG</span>
+        </div>
+        <div class="status-right">
+          <span id="status-crop">16:9 · 2400 × 1350 px</span>
+        </div>
+      </footer>
+
+      <div class="toast" id="toast" role="status" aria-live="polite">
+        <ryugi-icon name="check" size="13" id="toast-check"></ryugi-icon>
+        <ryugi-icon name="info" size="13" id="toast-info" hidden></ryugi-icon>
+        <span id="toast-text"></span>
+      </div>
+
+      <div class="scrim" id="scrim" hidden></div>
+      <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+        <header class="sheet-head">
+          <div>
+            <h2 id="sheet-title">保存 3 张图片</h2>
+            <p id="sheet-sub">按各图裁切设置保存 · 源文件不改</p>
+          </div>
+          <button class="icon-btn" id="sheet-close" type="button" aria-label="关闭" title="关闭">
+            <span class="glyph glyph-x lg" aria-hidden="true">×</span>
+          </button>
+        </header>
+        <div class="sheet-body" id="sheet-summary-view">
+          <div class="sum-head">
+            <span>将保存</span>
+            <strong id="summary-count">3 张图片</strong>
+          </div>
+          <div class="sum-meta">
+            <div class="sum-row"><span>格式</span><span id="summary-format">JPEG（跟随原图）</span></div>
+            <div class="sum-row"><span>比例</span><span id="summary-ratio">16:9 · 原始像素</span></div>
+            <div class="sum-row"><span>质量</span><span id="summary-quality">JPEG 标准压缩 · PNG 无损</span></div>
+            <div class="sum-row"><span>裁切</span><span id="summary-crops">3 张手动 · 5 张默认</span></div>
+            <div class="sum-row"><span>保存到</span><span id="summary-dest">原图所在目录</span></div>
+          </div>
+          <div class="summary-list" id="summary-list"></div>
+          <p class="sheet-note">不参与保存的图片不会写入。未手动调整的图片按各自比例居中裁切，源文件不会被修改。</p>
+        </div>
+        <div class="sheet-body" id="sheet-progress-view" hidden>
+          <div class="prog-row">
+            <span id="sheet-count">0 / 8</span>
+            <span id="sheet-pct">0%</span>
+          </div>
+          <div class="bar"><i id="sheet-bar"></i></div>
+          <div class="save-list" id="save-list"></div>
+          <p class="sheet-note">保存时可继续使用其他应用，源文件不会被修改。</p>
+        </div>
+        <div class="sheet-body done-view" id="sheet-done-view" hidden>
+          <span class="done-mark"><ryugi-icon name="check" size="18"></ryugi-icon></span>
+          <h3 id="done-title">已保存 8 个文件</h3>
+          <p id="done-path">原图所在目录</p>
+        </div>
+        <footer class="sheet-foot" id="sheet-summary-foot">
+          <button class="btn outline" id="summary-cancel" type="button">取消</button>
+          <button class="btn primary" id="sheet-start" type="button">保存 3 张</button>
+        </footer>
+        <footer class="sheet-foot" id="sheet-progress-foot" hidden>
+          <button class="btn outline" id="sheet-cancel" type="button">取消</button>
+        </footer>
+        <footer class="sheet-foot" id="sheet-done-foot" hidden>
+          <button class="btn outline" id="sheet-reveal" type="button">在 Finder 中显示</button>
+          <button class="btn outline" id="sheet-finish-clear" type="button" title="关闭摘要并清空本次列表，源文件保留">完成并清空</button>
+          <button class="btn primary" id="sheet-finish" type="button">完成</button>
+        </footer>
+      </section>
+
+      <div class="scrim" id="confirm-scrim" hidden></div>
+      <section class="confirm" id="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg" hidden>
+        <h2 id="confirm-title">清空本次图片？</h2>
+        <p id="confirm-msg"></p>
+        <div class="confirm-actions">
+          <button class="btn outline" id="confirm-cancel" type="button">取消</button>
+          <button class="btn danger" id="confirm-ok" type="button">清空</button>
+        </div>
+      </section>
+    </div>
+<script src="/ryugi-icons.js"></script>
+<script type="module" src="./src/main.ts"></script>
+</body>
+</html>
