@@ -1,6 +1,6 @@
 # PictureCut
 
-macOS 桌面版图片裁切工具。界面按 `../prototype/index.html` 一比一移植，Go 负责读写图片。
+macOS 桌面版图片裁切工具。界面移植自 `../prototype/index.html`，图片读写由 Go 负责。
 
 技术栈：MyGo 0.9.2（原生窗口 + WKWebView）、Go 1.27、TypeScript + Vite。
 
@@ -11,8 +11,6 @@ bun install
 bun run dev          # 开发窗口，前端在 http://localhost:5173
 bun run build        # build/darwin-arm64/PictureCut.app 和 .dmg
 ```
-
-`bun run dev` 需要同时改界面时再开一个 `bun run dev:web`。
 
 `bun run build` 若在 codesign 阶段报 `resource fork, Finder information, or similar detritus not allowed`，是文件带了扩展属性（仓库放在 iCloud Drive 时常见）：执行 `xattr -cr resources` 后重试。
 
@@ -37,8 +35,8 @@ bun run build        # build/darwin-arm64/PictureCut.app 和 .dmg
 
 - 所有比例、裁切框、暗部、网格线、手柄、检查器、保存摘要、进度、完成、确认框、toast 的 DOM 和 CSS 都来自原型，未重画。
 - 每张图独立保存比例和裁切，参与开关只影响保存。
-- 质量档位与输出目录是整批共用设置，保存后写入 `~/Library/Application Support/` 下的设置文件。
-- 保存进度逐张上报，失败的图片在列表里显示红叉，完成页按实际写盘数量报数。原型没有失败态，这是唯一的新增样式。
+- 质量档位与输出目录是整批共用设置，改动时写入 `~/Library/Application Support/PictureCut/settings.json`。
+- 保存进度逐张上报，失败的文件在保存进度里显示红叉，完成页按实际写盘数量报数。原型没有失败态，这是唯一的新增样式。
 
 原型里为了演示加的东西没有搬过来：假红绿灯（换成系统窗口按钮）、外层 `.page` 画框、隐藏的 `<input type=file>`、可编辑的输出路径输入框（改为点击选择目录）。工具栏加了拖动区域，并按系统窗口按钮的宽度留出左侧和右侧内边距。
 

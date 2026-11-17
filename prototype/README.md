@@ -35,6 +35,8 @@ npm test
 
 ## GitHub Pages
 
+线上地址：<https://11ze.github.io/picture-cut/>。
+
 仓库已带 `.github/workflows/pages.yml`。步骤：
 
 1. 推送到 GitHub。
