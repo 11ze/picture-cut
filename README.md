@@ -47,6 +47,16 @@ npm test                    # 原型自身的回归，5 个用例
 
 第一次跑浏览器用例前装 Chromium：`cd app && bunx playwright install chromium`。跑原型回归前先在仓库根目录 `npm ci`，再 `npx playwright install chromium`。
 
+## 发布
+
+打 tag 并推送，`Release` 工作流在 macOS、Windows、Linux 三个 runner 上构建，把安装包传到 GitHub Release。
+
+```bash
+git tag v0.1.1 && git push origin v0.1.1
+```
+
+发布说明由 [scripts/release-notes.sh](scripts/release-notes.sh) 按提交前缀生成，覆盖上一个 tag 之后的提交。版本号写在 `app/mygo.config.ts`，和 tag 不一致时工作流失败。也可以在 Actions 页面手动运行，填入已有 tag。
+
 ## 技术栈
 
 MyGo 0.9.2 提供原生窗口与 WebView，Go 负责解码、裁切、编码和写盘，前端是 TypeScript + Vite。桌面应用目前只在 macOS（Apple Silicon）上构建和验证。

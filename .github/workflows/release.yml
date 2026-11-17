@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "已有 tag，例如 v0.1.1"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  preflight:
+    name: Check version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Compare tag and config
+        run: |
+          version="${TAG#v}"
+          configured=$(sed -n 's/.*version: *"\([^"]*\)".*/\1/p' app/mygo.config.ts | head -1)
+          if [ "$configured" != "$version" ]; then
+            echo "版本不一致：app/mygo.config.ts 是 $configured，tag 是 $TAG" >&2
+            exit 1
+          fi
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: preflight
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: darwin/universal
+            artifact: macos
+          - os: windows-latest
+            target: windows/amd64
+            artifact: windows
+          - os: ubuntu-24.04
+            target: linux/amd64
+            artifact: linux
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: app/go.mod
+          cache-dependency-path: app/go.sum
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Install dependencies
+        working-directory: app
+        run: bun install --frozen-lockfile
+
+      - name: Build ${{ matrix.target }}
+        working-directory: app
+        run: bunx mygo build -platform ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          overwrite: true
+          path: |
+            app/build/**/*.dmg
+            app/build/**/*-setup-*.exe
+            app/build/**/*.tar.gz
+            app/build/**/*.deb
+            app/build/**/*.rpm
+            app/build/**/PKGBUILD
+            app/build/**/install.sh
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # upload-artifact 保留了 build 下的平台子目录，这里只取文件。
+          files=()
+          while IFS= read -r file; do files+=("$file"); done < <(find assets -type f)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "没有可发布的文件" >&2
+            exit 1
+          fi
+
+          extra=""
+          case "$TAG" in
+            *-*) extra="--prerelease" ;;
+          esac
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # 已有的 release 保留原说明，只补资产。
+            gh release upload "$TAG" "${files[@]}" --clobber
+            if [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" = "true" ]; then
+              gh release edit "$TAG" --draft=false
+            fi
+          else
+            bash scripts/release-notes.sh > notes.md
+            {
+              echo
+              echo "---"
+              echo
+              echo "macOS：下载 .dmg，打开后把 PictureCut 拖进 Applications。应用未签名，首次运行要右键点图标，选「打开」。"
+              echo "Windows：下载 -setup-.exe 安装包。SmartScreen 提示时点「更多信息」，再点「仍要运行」。"
+              echo "Linux：.deb 或 .rpm 直接安装，.tar.gz 解压即可运行；install.sh 是安装到 ~/.local 的可选脚本。"
+            } >> notes.md
+            gh release create "$TAG" "${files[@]}" \
+              --title "PictureCut $TAG" \
+              --notes-file notes.md \
+              $extra
+          fi
