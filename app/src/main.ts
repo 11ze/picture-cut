@@ -1,5 +1,5 @@
 // The window: the list, the crop canvas, the inspector, and the save sheet.
-import { Channel } from "mygo-runtime";
+import { Channel, onFileDrop } from "mygo-runtime";
 import { Library, type ImportResult, type Progress, type Report, type SaveItem } from "./mygo";
 import { clamp, isCustom, maxCrop, nudge, pixelRect, resize } from "./crop";
 import {
@@ -130,7 +130,7 @@ function buildFileList(): void {
   if (!state.docs.length) {
     const hint = document.createElement("div");
     hint.className = "list-empty";
-    hint.innerHTML = "暂无图片<br><span>点 + 添加</span>";
+    hint.innerHTML = "暂无图片<br><span>点 + 或拖入文件</span>";
     fileList.appendChild(hint);
   }
 }
@@ -451,6 +451,9 @@ function endDrag(): void {
 }
 
 let saveOpen = false;
+// Bumped by every open and close, so an open that awaited names stops when
+// the user closed the sheet meanwhile.
+let sheetCall = 0;
 let channel: Channel<Progress> | null = null;
 let report: Report | null = null;
 
@@ -481,10 +484,12 @@ async function openSheet(): Promise<void> {
   if (!state.docs.length) return;
   const docs = appliedDocs();
   if (!docs.length) return;
+  saveOpen = true;
+  const call = ++sheetCall;
   await refreshNames();
+  if (call !== sheetCall) return;
   updateInspector();
   const skipped = state.docs.length - docs.length;
-  saveOpen = true;
   report = null;
   $("sheet-title").textContent = `保存 ${docs.length} 张图片`;
   $("sheet-sub").textContent = skipped
@@ -645,6 +650,7 @@ function showDone(result: Report): void {
 
 function closeSheet(focusEl?: HTMLElement): void {
   if (!saveOpen) return;
+  sheetCall++;
   saveOpen = false;
   // A save still in flight belongs to this sheet: forget it, and stop it.
   runSeq++;
@@ -784,8 +790,12 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function importWith(pick: () => Promise<ImportResult>): Promise<void> {
+async function importWith(pick: () => Promise<ImportResult>, emptyNote = ""): Promise<void> {
   if (state.importing) return;
+  if (saveOpen || confirmOpen) {
+    showToast("先完成当前操作再添加图片", "info");
+    return;
+  }
   setImporting(true);
   try {
     const result = await pick();
@@ -801,13 +811,92 @@ async function importWith(pick: () => Promise<ImportResult>): Promise<void> {
     const messages: string[] = [];
     if (added.length) messages.push(`已添加 ${added.length} 张`);
     if (result.skipped) messages.push(`跳过 ${result.skipped} 个文件，仅支持可读取的 JPG/JPEG、PNG`);
-    if (messages.length) showToast(messages.join(" · "), result.skipped ? "info" : "ok");
+    if (!messages.length && emptyNote) messages.push(emptyNote);
+    const tone = result.skipped || !added.length ? "info" : "ok";
+    if (messages.length) showToast(messages.join(" · "), tone);
   } catch (err) {
     showToast(errorText(err), "info");
   } finally {
     setImporting(false);
     updateAll();
   }
+}
+
+/** Imports files and folders dropped on the window. */
+function importDropped(paths: string[]): void {
+  dropAnswered = true;
+  if (dropBlocked()) {
+    showToast(state.importing ? "正在读取图片，请稍后" : "先完成当前操作再添加图片", "info");
+    return;
+  }
+  void importWith(() => Library.importPaths(paths), "没有找到可添加的图片");
+}
+
+let dropTimer = 0;
+let dropNonce = 0;
+let dropAnswered = false;
+
+/** Answers a drop MyGo did not report, so it cannot pass silently. */
+function watchDrop(): void {
+  dropAnswered = false;
+  const nonce = ++dropNonce;
+  setTimeout(() => {
+    if (nonce !== dropNonce || dropAnswered) return;
+    showToast("没有可添加的图片，仅支持 JPG/JPEG、PNG", "info");
+  }, 700);
+}
+
+/** True while a drop would race the save sheet or an import. */
+function dropBlocked(): boolean {
+  return state.importing || saveOpen || confirmOpen;
+}
+
+function isFileDrag(e: DragEvent): boolean {
+  const data = e.dataTransfer;
+  if (!data) return false;
+  return Array.from(data.types).includes("Files");
+}
+
+function hideDropTarget(): void {
+  clearTimeout(dropTimer);
+  $("drop").hidden = true;
+}
+
+/** Shows the drop target while files are dragged over the window. */
+function initDropTarget(): void {
+  document.addEventListener("dragenter", (e) => {
+    if (!isFileDrag(e)) return;
+    // Accept the drag so the target can show. MyGo's bridge cancels the drop
+    // itself, which keeps the file from replacing the page.
+    e.preventDefault();
+    if (dropBlocked()) return;
+    clearTimeout(dropTimer);
+    $("drop").hidden = false;
+  });
+  document.addEventListener("dragover", (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    const data = e.dataTransfer;
+    if (!data) return;
+    // Kept as a copy when blocked: a drop that is refused still arrives, so
+    // importDropped can say why.
+    data.dropEffect = "copy";
+    if (dropBlocked()) return;
+    clearTimeout(dropTimer);
+    $("drop").hidden = false;
+  });
+  document.addEventListener("dragleave", () => {
+    // Moving over the window's children fires dragleave too, so hide only if
+    // no dragover follows.
+    clearTimeout(dropTimer);
+    dropTimer = setTimeout(hideDropTarget, 180);
+  });
+  document.addEventListener("drop", (e) => {
+    hideDropTarget();
+    if (isFileDrag(e)) watchDrop();
+  });
+  document.addEventListener("dragend", hideDropTarget);
+  window.addEventListener("blur", hideDropTarget);
 }
 
 function persistSettings(): void {
@@ -839,6 +928,10 @@ function init(): void {
   img.addEventListener("load", () => layoutPhoto());
 
   cropEl.addEventListener("pointerdown", startMove);
+  initDropTarget();
+  onFileDrop(({ paths }) => {
+    if (paths.length) importDropped(paths);
+  });
   document.querySelectorAll<HTMLElement>(".handle").forEach((h) => {
     h.addEventListener("pointerdown", (e) => startResize(e, h));
   });

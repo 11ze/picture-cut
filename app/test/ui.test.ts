@@ -113,6 +113,7 @@ async function openApp(images: FixtureImage[] = []): Promise<Page> {
   await page.addInitScript(
     (fx: { images: FixtureImage[]; pixel: string }) => {
       const known = new Map<string, FixtureImage>();
+      const listeners = new Map<string, Set<(payload: unknown) => void>>();
       let seq = 0;
       const stub = {
         images: fx.images,
@@ -124,6 +125,14 @@ async function openApp(images: FixtureImage[] = []): Promise<Page> {
         canceled: false,
         fail: [] as number[],
         loaded: false,
+        dropPaths: [] as string[],
+        picks: 0,
+        importCalls: 0,
+        importDelay: 0,
+        nameDelay: 0,
+        emit(name: string, payload: unknown) {
+          for (const fn of listeners.get(name) ?? []) fn(payload);
+        },
       };
       (window as unknown as { __stub: typeof stub }).__stub = stub;
 
@@ -150,15 +159,28 @@ async function openApp(images: FixtureImage[] = []): Promise<Page> {
       const pick = () => ({ images: stub.images.map(clone), skipped: stub.skipped });
 
       const handlers: Record<string, (...args: any[]) => unknown> = {
-        "Library.PickImages": async () => pick(),
-        "Library.PickFolder": async () => pick(),
+        "Library.PickImages": async () => {
+          stub.picks++;
+          return pick();
+        },
+        "Library.PickFolder": async () => {
+          stub.picks++;
+          return pick();
+        },
+        "Library.ImportPaths": async (paths: string[]) => {
+          stub.importCalls++;
+          stub.dropPaths = paths;
+          if (stub.importDelay) await new Promise((r) => setTimeout(r, stub.importDelay));
+          return pick();
+        },
         "Library.ChooseOutputDir": async () => stub.chooseDir,
-        "Library.PreviewNames": (
+        "Library.PreviewNames": async (
           items: Array<{ id: string; ratio: string; applied: boolean }>,
           quality: string,
           inPlace: boolean,
           outDir: string,
         ) => {
+          if (stub.nameDelay) await new Promise((r) => setTimeout(r, stub.nameDelay));
           // Same rule as Go: the images being written reserve names in order.
           const taken = new Map<string, Set<string>>();
           return items.map((item) => {
@@ -238,7 +260,15 @@ async function openApp(images: FixtureImage[] = []): Promise<Page> {
         call: (method: string, ...args: unknown[]) => handlers[method]?.(...args),
         callWith: (method: string, args: unknown[]) => handlers[method]?.(...args),
         channel,
-        on: () => () => {},
+        on: (name: string, fn: (payload: unknown) => void) => {
+          let set = listeners.get(name);
+          if (!set) {
+            set = new Set();
+            listeners.set(name, set);
+          }
+          set.add(fn);
+          return () => set!.delete(fn);
+        },
         once: () => () => {},
         window: {
           minimize: async () => {},
@@ -270,6 +300,16 @@ async function addImages(page: Page): Promise<void> {
   await page.locator("#add-image").click();
   await page.waitForSelector(".file");
   await settle(page);
+}
+
+/** Dispatches a drag event with one file, like a drag from Finder. */
+async function dragFile(page: Page, type: string): Promise<boolean> {
+  return page.evaluate((t) => {
+    const data = new DataTransfer();
+    data.items.add(new File([new Uint8Array([1])], "one.jpg", { type: "image/jpeg" }));
+    const event = new DragEvent(t, { bubbles: true, cancelable: true, dataTransfer: data });
+    return !document.dispatchEvent(event);
+  }, type);
 }
 
 describe("window chrome", () => {
@@ -320,6 +360,193 @@ describe("import", () => {
     const toast = await page.locator("#toast-text").textContent();
     expect(toast).toContain("已添加 1 张");
     expect(toast).toContain("跳过 2 个文件，仅支持可读取的 JPG/JPEG、PNG");
+  });
+
+  test("adds the files dropped on the window", async () => {
+    const page = await openApp([CITY, LAKE]);
+    await page.evaluate(() => {
+      (window as unknown as { __stub: { emit: (name: string, payload: unknown) => void } }).__stub.emit(
+        "mygo:file-drop",
+        { paths: ["/pics/city.jpg", "/pics/lake.jpg"], x: 400, y: 300 },
+      );
+    });
+    await page.waitForSelector(".file");
+    await settle(page);
+    expect(await page.locator(".file").count()).toBe(2);
+    expect(await page.locator("#toast-text").textContent()).toContain("已添加 2 张");
+    const paths = await page.evaluate(
+      () => (window as unknown as { __stub: { dropPaths: string[] } }).__stub.dropPaths,
+    );
+    expect(paths).toEqual(["/pics/city.jpg", "/pics/lake.jpg"]);
+  });
+
+  test("shows the drop target while files are dragged over the window", async () => {
+    const page = await openApp();
+    expect(await page.locator("#drop").isVisible()).toBe(false);
+    expect(await dragFile(page, "dragenter")).toBe(true);
+    expect(await page.locator("#drop").isVisible()).toBe(true);
+    await dragFile(page, "dragover");
+    await page.waitForTimeout(300);
+    expect(await page.locator("#drop").isVisible()).toBe(true);
+    await dragFile(page, "drop");
+    expect(await page.locator("#drop").isVisible()).toBe(false);
+    await dragFile(page, "dragenter");
+    expect(await page.locator("#drop").isVisible()).toBe(true);
+    await dragFile(page, "dragleave");
+    await page.waitForTimeout(300);
+    expect(await page.locator("#drop").isVisible()).toBe(false);
+  });
+
+  test("refuses a drop while the save sheet is open", async () => {
+    const page = await openApp([CITY]);
+    await addImages(page);
+    await page.locator("#save-all").click();
+    await page.locator("#sheet:not([hidden])").waitFor();
+    // The drag is still accepted, or its reason would never be told, but the
+    // target stays hidden.
+    expect(await dragFile(page, "dragenter")).toBe(true);
+    expect(await page.locator("#drop").isVisible()).toBe(false);
+    await page.evaluate(() => {
+      (window as unknown as { __stub: { emit: (name: string, payload: unknown) => void } }).__stub.emit(
+        "mygo:file-drop",
+        { paths: ["/pics/extra.jpg"], x: 10, y: 10 },
+      );
+    });
+    await page.waitForFunction(() =>
+      document.querySelector("#toast-text")?.textContent?.includes("先完成当前操作"),
+    );
+    expect(await page.locator(".file").count()).toBe(1);
+    const paths = await page.evaluate(
+      () => (window as unknown as { __stub: { dropPaths: string[] } }).__stub.dropPaths,
+    );
+    expect(paths).toEqual([]);
+    // The add buttons take the same guard, not only drops.
+    await page.evaluate(() => {
+      (window as unknown as { __stub: { picks: number } }).__stub.picks = 0;
+      document.getElementById("add-image")!.click();
+    });
+    await page.waitForFunction(() =>
+      document.querySelector("#toast-text")?.textContent?.includes("先完成当前操作"),
+    );
+    const picks = await page.evaluate(
+      () => (window as unknown as { __stub: { picks: number } }).__stub.picks,
+    );
+    expect(picks).toBe(0);
+  });
+
+  test("refuses a drop while an import runs", async () => {
+    const page = await openApp([CITY]);
+    await page.evaluate(() => {
+      (window as unknown as { __stub: { importDelay: number } }).__stub.importDelay = 300;
+      (window as unknown as { __stub: { emit: (name: string, payload: unknown) => void } }).__stub.emit(
+        "mygo:file-drop",
+        { paths: ["/pics/city.jpg"], x: 10, y: 10 },
+      );
+    });
+    await page.waitForFunction(() =>
+      document.querySelector("#side-foot")?.textContent?.includes("正在读取"),
+    );
+    await page.evaluate(() => {
+      (window as unknown as { __stub: { emit: (name: string, payload: unknown) => void } }).__stub.emit(
+        "mygo:file-drop",
+        { paths: ["/pics/extra.jpg"], x: 10, y: 10 },
+      );
+    });
+    await page.waitForFunction(() =>
+      document.querySelector("#toast-text")?.textContent?.includes("正在读取图片，请稍后"),
+    );
+    await page.waitForFunction(() =>
+      document.querySelector("#side-foot")?.textContent?.includes("1 张"),
+    );
+    expect(await page.locator(".file").count()).toBe(1);
+    const state = await page.evaluate(() => {
+      const stub = (window as unknown as { __stub: { importCalls: number; dropPaths: string[] } })
+        .__stub;
+      return { calls: stub.importCalls, paths: stub.dropPaths };
+    });
+    expect(state).toEqual({ calls: 1, paths: ["/pics/city.jpg"] });
+  });
+
+  test("refuses a drop while the confirm dialog is open", async () => {
+    const page = await openApp([CITY]);
+    await addImages(page);
+    await page.locator(".file .remove").first().click();
+    await page.locator("#confirm:not([hidden])").waitFor();
+    await page.evaluate(() => {
+      (window as unknown as { __stub: { emit: (name: string, payload: unknown) => void } }).__stub.emit(
+        "mygo:file-drop",
+        { paths: ["/pics/extra.jpg"], x: 10, y: 10 },
+      );
+    });
+    await page.waitForFunction(() =>
+      document.querySelector("#toast-text")?.textContent?.includes("先完成当前操作"),
+    );
+    const state = await page.evaluate(() => {
+      const stub = (window as unknown as { __stub: { importCalls: number; dropPaths: string[] } })
+        .__stub;
+      return { calls: stub.importCalls, paths: stub.dropPaths };
+    });
+    expect(state).toEqual({ calls: 0, paths: [] });
+    expect(await page.locator(".file").count()).toBe(1);
+  });
+
+  test("reports a dropped file it cannot read", async () => {
+    const page = await openApp([CITY]);
+    await page.evaluate(() => {
+      const stub = (window as unknown as { __stub: { images: unknown[]; skipped: number } }).__stub;
+      stub.images = [];
+      stub.skipped = 1;
+      (stub as unknown as { emit: (name: string, payload: unknown) => void }).emit("mygo:file-drop", {
+        paths: ["/pics/notes.txt"],
+        x: 10,
+        y: 10,
+      });
+    });
+    await page.waitForFunction(() =>
+      document.querySelector("#toast-text")?.textContent?.includes("跳过 1 个文件"),
+    );
+    expect(await page.locator(".file").count()).toBe(0);
+  });
+
+  test("a drop that adds nothing still says so", async () => {
+    const page = await openApp();
+    await dragFile(page, "drop");
+    await page.waitForFunction(
+      () => document.querySelector("#toast-text")?.textContent?.includes("没有可添加的图片"),
+      undefined,
+      { timeout: 3000 },
+    );
+  });
+
+  test("a drop MyGo reports is not answered twice", async () => {
+    const page = await openApp([CITY]);
+    await dragFile(page, "drop");
+    await page.evaluate(() => {
+      (window as unknown as { __stub: { emit: (name: string, payload: unknown) => void } }).__stub.emit(
+        "mygo:file-drop",
+        { paths: ["/pics/city.jpg"], x: 10, y: 10 },
+      );
+    });
+    await page.waitForFunction(() =>
+      document.querySelector("#toast-text")?.textContent?.includes("已添加 1 张"),
+    );
+    await page.waitForTimeout(1000);
+    expect(await page.locator("#toast-text").textContent()).not.toContain("没有可添加");
+  });
+
+  test("says so when a drop has no images", async () => {
+    const page = await openApp();
+    await page.evaluate(() => {
+      (window as unknown as { __stub: { emit: (name: string, payload: unknown) => void } }).__stub.emit(
+        "mygo:file-drop",
+        { paths: ["/pics/empty"], x: 10, y: 10 },
+      );
+    });
+    await page.waitForFunction(() =>
+      document.querySelector("#toast-text")?.textContent?.includes("没有找到可添加的图片"),
+    );
+    expect(await page.locator("#toast-info").isVisible()).toBe(true);
+    expect(await page.locator(".file").count()).toBe(0);
   });
 });
 
@@ -494,6 +721,22 @@ describe("save", () => {
     );
     expect(canceled).toBe(true);
     expect(await page.locator("#sheet-done-view").isHidden()).toBe(true);
+  });
+
+  test("closing the sheet while it opens leaves it closed", async () => {
+    const page = await openApp([CITY]);
+    await addImages(page);
+    await page.evaluate(() => {
+      (window as unknown as { __stub: { nameDelay: number } }).__stub.nameDelay = 300;
+    });
+    await page.locator("#save-all").click();
+    await page.waitForTimeout(50);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(500);
+    expect(await page.locator("#sheet").isHidden()).toBe(true);
+    // The window did not lose its open guard: Cmd+S opens the sheet again.
+    await page.locator("#save-all").click();
+    await page.locator("#sheet:not([hidden])").waitFor();
   });
 });
 

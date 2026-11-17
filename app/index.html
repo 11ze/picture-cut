@@ -51,7 +51,7 @@
           <div class="empty" id="empty" hidden>
             <span class="empty-mark" aria-hidden="true"><span class="glyph glyph-plus lg">+</span></span>
             <div class="empty-title">把图片加入本次列表</div>
-            <div class="empty-sub">打开图片或文件夹。仅支持 JPG/JPEG、PNG。</div>
+            <div class="empty-sub">把图片或文件夹拖到这里，或打开图片、打开文件夹。<br />仅支持 JPG/JPEG、PNG。</div>
             <div class="empty-actions">
               <button class="btn outline" id="empty-open" type="button">打开图片</button>
               <button class="btn outline" id="empty-folder" type="button">打开文件夹</button>
@@ -142,6 +142,12 @@
           <span id="status-crop">16:9 · 2400 × 1350 px</span>
         </div>
       </footer>
+
+      <div class="drop" id="drop" hidden aria-hidden="true">
+        <span class="drop-mark" aria-hidden="true"><span class="glyph glyph-plus lg">+</span></span>
+        <div class="drop-title">松开以添加图片</div>
+        <div class="drop-sub">JPG/JPEG、PNG · 文件夹会导入其中所有图片</div>
+      </div>
 
       <div class="toast" id="toast" role="status" aria-live="polite">
         <ryugi-icon name="check" size="13" id="toast-check"></ryugi-icon>

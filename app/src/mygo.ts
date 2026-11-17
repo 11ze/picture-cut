@@ -93,6 +93,11 @@ export const Library = {
    * sources. It returns "" when the dialog is canceled.
    */
   chooseOutputDir: bind<[], string>("Library.ChooseOutputDir", () => []),
+  /**
+   * ImportPaths imports dropped files, and every JPEG and PNG under a dropped
+   * folder, as PickImages and PickFolder import what they pick.
+   */
+  importPaths: bind<[string[]], ImportResult>("Library.ImportPaths", (paths: string[]) => [paths]),
   /** PickFolder asks for a folder and imports every JPEG and PNG under it. */
   pickFolder: bind<[], ImportResult>("Library.PickFolder", () => []),
   /** PickImages asks for image files and imports the ones it can read. */

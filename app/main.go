@@ -188,6 +188,23 @@ func (l *Library) PickFolder(ctx context.Context) (ImportResult, error) {
 	return l.importPaths(files), nil
 }
 
+// ImportPaths imports dropped files, and every JPEG and PNG under a dropped
+// folder, as PickImages and PickFolder import what they pick.
+func (l *Library) ImportPaths(paths []string) ImportResult {
+	var files []string
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil || !info.IsDir() {
+			// A file, or something that is gone: importPaths counts a file it
+			// cannot read as skipped, as with a picked one.
+			files = append(files, path)
+			continue
+		}
+		files = append(files, collectImages(path)...)
+	}
+	return l.importPaths(files)
+}
+
 // collectImages lists the JPEG and PNG files under root, in walk order,
 // without hidden files or the insides of hidden folders.
 func collectImages(root string) []string {

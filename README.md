@@ -8,7 +8,7 @@
 
 ## 功能
 
-- 导入单张、多张图片，或整个文件夹。只收能解码的 JPG/JPEG、PNG，其他跳过并提示。
+- 导入单张、多张图片，或整个文件夹，也可以把图片或文件夹拖进窗口。只收能解码的 JPG/JPEG、PNG，其他跳过并提示。
 - 9 个固定比例，没有自由比例。每张图单独保存自己的比例和裁切位置。
 - 「参与保存」只控制这张图是否写盘，关掉后裁切设置保留。
 - 质量档位和输出目录是整批共用设置。JPEG 两档为 q80、q95；PNG 标准压缩降到 256 色并保留透明，无损保存不压色。
@@ -41,8 +41,8 @@ bun run build   # 产物在 app/build/darwin-arm64/
 ```bash
 # 都在仓库根目录执行
 (cd app && go test ./...)   # 解码、裁切、命名、编码、保存、协议
-(cd app && bun run test)    # 裁切几何 + 11 个浏览器端用例，含与原型逐像素对比
-npm test                    # 原型自身的回归，5 个用例
+(cd app && bun run test)    # 裁切几何 + 21 个浏览器端用例，含与原型逐像素对比
+npm test                    # 原型自身的回归，12 个用例
 ```
 
 第一次跑浏览器用例前装 Chromium：`cd app && bunx playwright install chromium`。跑原型回归前先在仓库根目录 `npm ci`，再 `npx playwright install chromium`。
@@ -63,7 +63,7 @@ MyGo 0.9.2 提供原生窗口与 WebView，Go 负责解码、裁切、编码和�
 
 ## 限制
 
-不支持拖拽导入、旋转翻转、自由比例、命名模板、EXIF 回写和 ICC 色彩管理。16-bit PNG 的「无损保存」会降到 8-bit。更多细节见 [app/README.md](app/README.md)。
+不支持旋转翻转、自由比例、命名模板、EXIF 回写和 ICC 色彩管理。16-bit PNG 的「无损保存」会降到 8-bit。更多细节见 [app/README.md](app/README.md)。
 
 ## 素材
 

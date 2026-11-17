@@ -173,3 +173,225 @@ test('different images with the same name, size and modification time are both i
   assert.equal(await page.locator('.file').filter({ hasText: 'same.png' }).count(), 2);
   assert.equal(await page.locator('#count').innerText(), '5');
 });
+
+// Drag and drop: a drop event carries files as a DataTransfer. Chromium gives
+// no file entries to a DataTransfer the page builds, so one test covers the
+// fallback path and another supplies stand-ins shaped like the browser's
+// FileSystemEntry objects for the folder walk.
+const PNG = readFileSync(path.join(__dirname, 'fixtures/transparent.png')).toString('base64');
+
+async function dispatchDrag(page, type, files, target = '#canvas') {
+  return page.evaluate(({ type, files, target }) => {
+    const dt = new DataTransfer();
+    for (const f of files) {
+      const bytes = Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0));
+      dt.items.add(new File([bytes], f.name, { type: f.type || '' }));
+    }
+    return document.querySelector(target).dispatchEvent(
+      new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }),
+    );
+  }, { type, files, target });
+}
+
+async function dragEffect(page, type, files) {
+  return page.evaluate(({ type, files }) => {
+    const dt = new DataTransfer();
+    let effect = 'none';
+    // Chromium drops writes to dropEffect on a synthetic DataTransfer, so the
+    // test keeps the value the page wrote itself.
+    Object.defineProperty(dt, 'dropEffect', {
+      configurable: true,
+      get: () => effect,
+      set: (value) => { effect = value; },
+    });
+    for (const f of files) {
+      const bytes = Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0));
+      dt.items.add(new File([bytes], f.name, { type: f.type || '' }));
+    }
+    document.querySelector('#canvas').dispatchEvent(
+      new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }),
+    );
+    return effect;
+  }, { type, files });
+}
+
+async function dropTree(page, tree) {
+  return page.evaluate(({ tree, png }) => {
+    const bytes = () => Uint8Array.from(atob(png), (c) => c.charCodeAt(0));
+    const entry = (node) => {
+      if (node.type === 'dir') {
+        let next = 0;
+        return {
+          isFile: false, isDirectory: true, name: node.name, fullPath: '/' + node.name + '/',
+          createReader() {
+            return {
+              // One child per call, the way the browser pages a large folder.
+              readEntries(done, fail) {
+                if (node.fail) return fail(new Error('unreadable folder'));
+                if (next >= node.children.length) return done([]);
+                done([entry(node.children[next++])]);
+              },
+            };
+          },
+        };
+      }
+      return {
+        isFile: true, isDirectory: false, name: node.name, fullPath: '/' + node.name,
+        file(done, fail) {
+          if (node.fail) return fail(new Error('unreadable file'));
+          const body = node.text ? new TextEncoder().encode(node.text) : bytes();
+          done(new File([body], node.name));
+        },
+      };
+    };
+    const dt = new DataTransfer();
+    Object.defineProperty(dt, 'items', {
+      value: [{ kind: 'file', type: '', webkitGetAsEntry: () => entry(tree) }],
+    });
+    return document.querySelector('#canvas').dispatchEvent(
+      new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }),
+    );
+  }, { tree, png: PNG });
+}
+
+test('dropping image files adds them and reports what it skipped', async t => {
+  const page = await openPrototype(t);
+  await dispatchDrag(page, 'drop', [
+    { name: 'dropped.png', type: 'image/png', base64: PNG },
+    { name: 'notes.txt', type: 'text/plain', base64: Buffer.from('notes').toString('base64') },
+    { name: 'broken.jpg', type: 'image/jpeg', base64: Buffer.from('broken').toString('base64') },
+  ]);
+  await page.locator('.file').filter({ hasText: 'dropped.png' }).waitFor();
+  assert.equal(await page.locator('#count').innerText(), '4');
+  assert.match(await page.locator('#toast-text').innerText(), /已添加 1 张 · 跳过 2 个文件/);
+});
+
+test('dragging files over the window shows the drop target, and leaving hides it', async t => {
+  const page = await openPrototype(t);
+  const prevented = await dispatchDrag(page, 'dragenter', [
+    { name: 'hover.png', type: 'image/png', base64: PNG },
+  ]);
+  assert.equal(prevented, false);
+  await page.locator('#drop').waitFor();
+  assert.match(await page.locator('#drop').innerText(), /松开.*添加/);
+  assert.match(await page.locator('#drop').innerText(), /文件夹/);
+
+  // Moving between the window's children fires dragleave too.
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File(['x'], 'hover.png'));
+    for (const target of ['#canvas', '#stage']) {
+      document.querySelector(target).dispatchEvent(
+        new DragEvent('dragenter', { dataTransfer: dt, bubbles: true, cancelable: true }),
+      );
+    }
+    document.querySelector('#canvas').dispatchEvent(
+      new DragEvent('dragleave', { dataTransfer: dt, bubbles: true, cancelable: true }),
+    );
+    document.querySelector('#stage').dispatchEvent(
+      new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }),
+    );
+  });
+  assert.equal(await page.locator('#drop').isVisible(), true);
+  await page.evaluate(() => {
+    document.querySelector('#window').dispatchEvent(
+      new DragEvent('dragleave', { bubbles: true, cancelable: true }),
+    );
+  });
+  await page.locator('#drop').waitFor({ state: 'hidden' });
+
+  await dispatchDrag(page, 'drop', [{ name: 'hover.png', type: 'image/png', base64: PNG }]);
+  await page.locator('.file').filter({ hasText: 'hover.png' }).waitFor();
+  assert.equal(await page.locator('#drop').isVisible(), false);
+
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', 'hello');
+    document.querySelector('#canvas').dispatchEvent(
+      new DragEvent('dragenter', { dataTransfer: dt, bubbles: true, cancelable: true }),
+    );
+  });
+  assert.equal(await page.locator('#drop').isVisible(), false);
+});
+
+test('dropping a folder adds every image inside, including nested folders', async t => {
+  const page = await openPrototype(t);
+  const before = await page.locator('.file .fname').allTextContents();
+  await dropTree(page, {
+    type: 'dir', name: 'Trip', children: [
+      { type: 'file', name: 'first.png' },
+      { type: 'file', name: '.hidden.png' },
+      { type: 'file', name: '.DS_Store', text: 'junk' },
+      { type: 'file', name: 'notes.txt', text: 'notes' },
+      { type: 'file', name: 'broken.png', fail: true },
+      { type: 'dir', name: '.trash', children: [{ type: 'file', name: 'old.png' }] },
+      { type: 'dir', name: 'nested', children: [{ type: 'file', name: 'second.png' }] },
+    ],
+  });
+
+  await page.locator('.file').filter({ hasText: 'second.png' }).waitFor();
+  const after = await page.locator('.file .fname').allTextContents();
+  assert.deepEqual(after.filter((name) => !before.includes(name)), ['first.png', 'second.png']);
+  assert.equal(await page.locator('#count').innerText(), '5');
+  assert.match(await page.locator('#toast-text').innerText(), /^已添加 2 张 · 跳过 1 个文件/);
+});
+
+test('a drop is refused while the save sheet is open', async t => {
+  const page = await openPrototype(t);
+  await page.locator('#save-all').click();
+  await page.locator('#sheet').waitFor();
+  const prevented = await dispatchDrag(page, 'dragover', [
+    { name: 'late.png', type: 'image/png', base64: PNG },
+  ]);
+  assert.equal(prevented, false);
+  assert.equal(await page.locator('#drop').isVisible(), false);
+  const effect = await dragEffect(page, 'dragover', [
+    { name: 'late.png', type: 'image/png', base64: PNG },
+  ]);
+  assert.equal(effect, 'copy');
+  await dispatchDrag(page, 'drop', [{ name: 'late.png', type: 'image/png', base64: PNG }]);
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('#count').innerText(), '3');
+  assert.match(await page.locator('#toast-text').innerText(), /先完成当前操作再添加图片/);
+});
+
+test('a dropped folder whose own name starts with a dot is still imported', async t => {
+  const page = await openPrototype(t);
+  const before = await page.locator('.file .fname').allTextContents();
+  await dropTree(page, {
+    type: 'dir', name: '.photos', children: [{ type: 'file', name: 'keep.png' }],
+  });
+  await page.locator('.file').filter({ hasText: 'keep.png' }).waitFor();
+  const after = await page.locator('.file .fname').allTextContents();
+  assert.deepEqual(after.filter((name) => !before.includes(name)), ['keep.png']);
+});
+
+test('a picked folder whose own name starts with a dot is still imported', async t => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'picturecut-dot-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  mkdirSync(path.join(directory, '.photos'));
+  writeFileSync(path.join(directory, '.photos/keep.png'), Buffer.from(PNG, 'base64'));
+
+  const page = await openPrototype(t);
+  await page.locator('#folder-input').setInputFiles(path.join(directory, '.photos'));
+  await page.locator('.file').filter({ hasText: 'keep.png' }).waitFor();
+  assert.equal(await page.locator('#count').innerText(), '4');
+});
+
+test('a folder picked in the dialog leaves out other files without counting them', async t => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'picturecut-folder-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  mkdirSync(path.join(directory, 'nested'));
+  mkdirSync(path.join(directory, '.cache'));
+  writeFileSync(path.join(directory, 'photo.png'), Buffer.from(PNG, 'base64'));
+  writeFileSync(path.join(directory, 'nested/other.png'), Buffer.from(PNG, 'base64'));
+  writeFileSync(path.join(directory, '.cache/inside.png'), Buffer.from(PNG, 'base64'));
+  writeFileSync(path.join(directory, 'notes.txt'), 'notes');
+  writeFileSync(path.join(directory, '.DS_Store'), 'junk');
+
+  const page = await openPrototype(t);
+  await page.locator('#folder-input').setInputFiles(directory);
+  await page.locator('.file').filter({ hasText: 'other.png' }).waitFor();
+  assert.equal(await page.locator('#count').innerText(), '5');
+  assert.match(await page.locator('#toast-text').innerText(), /^已添加 2 张$/);
+});

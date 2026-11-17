@@ -793,7 +793,7 @@
     position: absolute;
     left: 50%;
     bottom: 44px;
-    z-index: 30;
+    z-index: 32;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -812,6 +812,36 @@
   }
   .toast.show { transform: translate(-50%, 0); opacity: 1; }
   .toast ryugi-icon { color: var(--accent); flex: none; }
+
+  /* drop target */
+  .drop {
+    position: absolute;
+    inset: 8px;
+    z-index: 45;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px dashed rgba(232,163,61,.6);
+    border-radius: 9px;
+    background: rgba(10,9,7,.74);
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+    pointer-events: none;
+  }
+  .drop-mark {
+    width: 48px; height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    border: 1px solid rgba(232,163,61,.32);
+    color: var(--accent);
+    font-size: 20px;
+    line-height: 1;
+  }
+  .drop-title { margin-top: 14px; font-size: 14px; font-weight: 600; color: var(--text); }
+  .drop-sub { margin-top: 6px; color: var(--text-3); font-size: 11px; }
 
   /* save sheet */
   .scrim {
@@ -1105,7 +1135,7 @@
           <div class="empty" id="empty" hidden>
             <span class="empty-mark" aria-hidden="true"><span class="glyph glyph-plus lg">+</span></span>
             <div class="empty-title">把图片加入本次列表</div>
-            <div class="empty-sub">打开图片或文件夹。仅支持 JPG/JPEG、PNG。</div>
+            <div class="empty-sub">把图片或文件夹拖到这里，或打开图片、打开文件夹。<br />仅支持 JPG/JPEG、PNG。</div>
             <div class="empty-actions">
               <button class="btn outline" id="empty-open" type="button">打开图片</button>
               <button class="btn outline" id="empty-folder" type="button">打开文件夹</button>
@@ -1196,6 +1226,12 @@
           <span id="status-crop">16:9 · 2400 × 1350 px</span>
         </div>
       </footer>
+
+      <div class="drop" id="drop" hidden aria-hidden="true">
+        <span class="drop-mark" aria-hidden="true"><span class="glyph glyph-plus lg">+</span></span>
+        <div class="drop-title">松开以添加图片</div>
+        <div class="drop-sub">JPG/JPEG、PNG · 文件夹会导入其中所有图片</div>
+      </div>
 
       <div class="toast" id="toast" role="status" aria-live="polite">
         <ryugi-icon name="check" size="13" id="toast-check"></ryugi-icon>
@@ -1300,6 +1336,7 @@
   const PICTURES = '原图所在目录';
   let importId = 0;
   let importing = false;
+  let reading = false;
 
   const state = {
     selectedId: 'city',
@@ -1444,7 +1481,7 @@
     if (!active.length) {
       const hint = document.createElement('div');
       hint.className = 'list-empty';
-      hint.innerHTML = '暂无图片<br><span>点 + 添加</span>';
+      hint.innerHTML = '暂无图片<br><span>点 + 或拖入文件</span>';
       fileList.appendChild(hint);
     }
   }
@@ -1483,14 +1520,14 @@
     $('folder-input').click();
   }
 
-  async function importFiles(files) {
+  async function importFiles(files, unreadable = 0) {
     if (importing) return;
     importing = true;
     $('save-all').disabled = true;
     $('side-foot').textContent = '正在读取图片…';
     ['add-btn', 'empty-open', 'empty-folder'].forEach((id) => { $(id).disabled = true; });
     const added = [];
-    let skipped = 0;
+    let skipped = unreadable;
     for (const file of files) {
       let src;
       try {
@@ -1535,6 +1572,168 @@
     if (skipped) messages.push('跳过 ' + skipped + ' 个文件，仅支持可读取的 JPG/JPEG、PNG');
     showToast(messages.join(' · '), skipped ? 'info' : undefined);
   }
+
+  function isFileDrag(e) {
+    return Boolean(e.dataTransfer) && Array.from(e.dataTransfer.types).includes('Files');
+  }
+
+  let dragTimer = 0;
+
+  function dropBlocked() {
+    return importing || reading || saveOpen || confirmOpen;
+  }
+
+  function showDrop(show) {
+    $('drop').hidden = !show;
+  }
+
+  function hideDrop() {
+    clearTimeout(dragTimer);
+    dragTimer = 0;
+    showDrop(false);
+  }
+
+  function beginReading() {
+    reading = true;
+    $('save-all').disabled = true;
+    $('side-foot').textContent = '正在读取图片…';
+    ['add-btn', 'empty-open', 'empty-folder'].forEach((id) => { $(id).disabled = true; });
+  }
+
+  function endReading() {
+    reading = false;
+    ['add-btn', 'empty-open', 'empty-folder'].forEach((id) => { $(id).disabled = false; });
+    updateAll();
+  }
+
+  document.addEventListener('dragenter', (e) => {
+    if (!isFileDrag(e)) return;
+    // A file dropped on the page must never replace it, even when the drop is
+    // refused below.
+    e.preventDefault();
+    if (dropBlocked()) return;
+    clearTimeout(dragTimer);
+    showDrop(true);
+  });
+
+  document.addEventListener('dragover', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    // Kept as a copy when a drop is refused: the browser fires no drop for a
+    // 'none' effect, so the toast that says why would never show.
+    e.dataTransfer.dropEffect = 'copy';
+    if (dropBlocked()) return;
+    clearTimeout(dragTimer);
+    showDrop(true);
+  });
+
+  document.addEventListener('dragleave', () => {
+    // Moving over the window's children fires dragleave too, so hide only if no
+    // dragover follows.
+    clearTimeout(dragTimer);
+    dragTimer = setTimeout(() => showDrop(false), 180);
+  });
+
+  document.addEventListener('dragend', hideDrop);
+  window.addEventListener('blur', hideDrop);
+
+  function readAllEntries(reader) {
+    return new Promise((resolve, reject) => {
+      const all = [];
+      const next = () => {
+        reader.readEntries((batch) => {
+          if (!batch.length) return resolve(all);
+          all.push(...batch);
+          next();
+        }, reject);
+      };
+      next();
+    });
+  }
+
+  // walkEntry collects the JPEG and PNG files under one dropped entry. A
+  // folder is read in full, so a dropped folder imports the images in its
+  // subfolders too. Hidden entries and other extensions are left out without
+  // being counted, as the app's folder import does. A file the browser cannot
+  // open is counted as skipped.
+  // inHiddenFolder reports a file inside a folder whose name starts with a dot,
+  // as walkEntry and the app's folder import leave those out. The picked folder
+  // itself is the first path segment and stays honoured.
+  function inHiddenFolder(file) {
+    const relative = file.webkitRelativePath || '';
+    const parts = (relative || file.name).split('/');
+    return parts.slice(relative ? 1 : 0).some((part) => part.startsWith('.'));
+  }
+
+  async function walkEntry(entry, parent, out) {
+    // The dropped folder itself is honoured; hidden folders inside it are not.
+    if (parent && entry.name.startsWith('.')) return;
+    const path = (parent ? parent + '/' : '') + entry.name;
+    if (entry.isFile) {
+      if (!/\.(jpe?g|png)$/i.test(entry.name)) return;
+      try {
+        const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+        out.files.push({ path, file });
+      } catch {
+        out.failed++;
+      }
+      return;
+    }
+    if (!entry.isDirectory) return;
+    const children = await readAllEntries(entry.createReader());
+    for (const child of children) await walkEntry(child, path, out);
+  }
+
+  async function collectDroppedFiles(dt) {
+    const loose = Array.from(dt.files || []);
+    const seen = new Set(loose.map((f) => f.name + ':' + f.size));
+    const entries = [];
+    for (const item of Array.from(dt.items || [])) {
+      if (item.kind !== 'file') continue;
+      const entry = typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null;
+      if (entry) {
+        entries.push(entry);
+      } else if (typeof item.getAsFile === 'function') {
+        const file = item.getAsFile();
+        if (file && !seen.has(file.name + ':' + file.size)) {
+          seen.add(file.name + ':' + file.size);
+          loose.push(file);
+        }
+      }
+    }
+    if (!entries.length) return { files: loose, failed: 0 };
+    const found = { files: [], failed: 0 };
+    for (const entry of entries) {
+      try {
+        await walkEntry(entry, '', found);
+      } catch {
+        found.failed++;
+      }
+    }
+    found.files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    return { files: found.files.map((f) => f.file), failed: found.failed };
+  }
+
+  document.addEventListener('drop', (e) => {
+    hideDrop();
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    const fileItems = Array.from(dt.items || []).filter((item) => item.kind === 'file');
+    if (!fileItems.length && !dt.files.length) return;
+    e.preventDefault();
+    if (dropBlocked()) {
+      showToast(importing || reading ? '正在读取图片，请稍后' : '先完成当前操作再添加图片', 'info');
+      return;
+    }
+    beginReading();
+    collectDroppedFiles(dt).then(({ files, failed }) => {
+      reading = false;
+      return importFiles(files, failed);
+    }).catch(() => {
+      endReading();
+      showToast('读取文件夹失败，请重试', 'info');
+    });
+  });
 
   function removeDoc(id) {
     const i = active.findIndex((d) => d.id === id);
@@ -1630,7 +1829,7 @@
     else state.skipped.add(d.id);
     updateFileList();
     updateInspector();
-    $('save-all').disabled = importing || !appliedDocs().length;
+    $('save-all').disabled = importing || reading || !appliedDocs().length;
     showToast(isApplied(d) ? '这张图已参与保存' : '这张图不参与保存，裁切设置已保留');
   }
 
@@ -1785,9 +1984,9 @@
     $('apply-toggle').disabled = false;
     $('apply-toggle').setAttribute('aria-checked', String(applied));
     $('save-count').textContent = String(appliedDocs().length);
-    $('save-all').disabled = importing || !appliedDocs().length;
+    $('save-all').disabled = importing || reading || !appliedDocs().length;
     $('count').textContent = String(active.length);
-    $('side-foot').textContent = importing ? '正在读取图片…' : active.length + ' 张 · ' + mb(totalBytes()) + ' MB';
+    $('side-foot').textContent = importing || reading ? '正在读取图片…' : active.length + ' 张 · ' + mb(totalBytes()) + ' MB';
   }
 
   let toastTimer = null;
@@ -1992,7 +2191,7 @@
   }
 
   function openSheet() {
-    if (importing) return;
+    if (importing || reading) return;
     if (saveOpen) return;
     if (!active.length) return;
     const docs = appliedDocs();
@@ -2115,8 +2314,13 @@
     ['image-input', 'folder-input'].forEach((id) => {
       const input = $(id);
       input.addEventListener('change', () => {
-        const files = Array.from(input.files);
+        let files = Array.from(input.files);
         input.value = '';
+        if (id === 'folder-input') {
+          // The folder walk leaves other files out without counting them, so
+          // the picker does the same.
+          files = files.filter((f) => /\.(jpe?g|png)$/i.test(f.name) && !inHiddenFolder(f));
+        }
         if (files.length) importFiles(files);
       });
     });

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -240,6 +241,52 @@ func TestCollectImagesSkipsHiddenFiles(t *testing.T) {
 	want := []string{filepath.Join(dir, "keep.jpg"), filepath.Join(dir, "keep.png")}
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("collectImages = %v, want %v", got, want)
+	}
+}
+
+func TestImportPathsTakesFilesAndFolders(t *testing.T) {
+	dir := t.TempDir()
+	folder := filepath.Join(dir, "trip")
+	if err := os.MkdirAll(filepath.Join(folder, "nested", ".cache"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeImage(t, filepath.Join(dir, "one.jpg"), 40, 30, "jpeg")
+	writeImage(t, filepath.Join(folder, "two.png"), 40, 30, "png")
+	writeImage(t, filepath.Join(folder, "nested", "three.jpeg"), 40, 30, "jpeg")
+	writeImage(t, filepath.Join(folder, ".hidden.png"), 40, 30, "png")
+	writeImage(t, filepath.Join(folder, "nested", ".cache", "four.png"), 40, 30, "png")
+	if err := os.WriteFile(filepath.Join(folder, "notes.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(dir, "gone.jpg")
+
+	lib := newTestLibrary(t)
+	got := lib.ImportPaths([]string{filepath.Join(dir, "one.jpg"), folder, missing})
+
+	names := make([]string, len(got.Images))
+	for i, img := range got.Images {
+		names[i] = img.Name
+	}
+	sort.Strings(names)
+	want := []string{"one.jpg", "three.jpeg", "two.png"}
+	if strings.Join(names, ",") != strings.Join(want, ",") {
+		t.Fatalf("images = %v, want %v", names, want)
+	}
+	if got.Skipped != 1 {
+		t.Fatalf("skipped = %d, want 1", got.Skipped)
+	}
+}
+
+func TestImportPathsFolderWithoutImages(t *testing.T) {
+	folder := t.TempDir()
+	if err := os.WriteFile(filepath.Join(folder, "notes.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	lib := newTestLibrary(t)
+	got := lib.ImportPaths([]string{folder})
+	if len(got.Images) != 0 || got.Skipped != 0 {
+		t.Fatalf("import = %d images, %d skipped, want none", len(got.Images), got.Skipped)
 	}
 }
 
