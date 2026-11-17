@@ -29,17 +29,7 @@ git log "$range" --no-merges --pretty=format:'%s' | awk '
   head = substr($0, 1, p - 1)
   msg = substr($0, p + 2)
   sub(/[(!].*/, "", head)
-  if (head == "feat") feat = feat "- " msg "\n"
-  else if (head == "fix") fix = fix "- " msg "\n"
-  else if (head == "docs") docs = docs "- " msg "\n"
-  else if (head == "perf" || head == "style" || head == "refactor") imp = imp "- " msg "\n"
-}
-END {
-  s = ""
-  if (feat != "") s = s "## 新增\n" feat "\n"
-  if (fix != "") s = s "## 修复\n" fix "\n"
-  if (docs != "") s = s "## 文档\n" docs "\n"
-  if (imp != "") s = s "## 改进\n" imp "\n"
-  gsub(/\n+$/, "", s)
-  if (s != "") print s
+  if (head == "feat") print "Added " msg
+  else if (head == "fix") print "Fixed " msg
+  else if (head == "perf" || head == "style" || head == "refactor") print "Improved " msg
 }'

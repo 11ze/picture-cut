@@ -147,7 +147,7 @@ jobs:
               echo "Linux：.deb 或 .rpm 直接安装，.tar.gz 解压即可运行；install.sh 是安装到 ~/.local 的可选脚本。"
             } >> notes.md
             gh release create "$TAG" "${files[@]}" \
-              --title "PictureCut $TAG" \
+              --title "$TAG" \
               --notes-file notes.md \
               $extra
           fi
