@@ -1,0 +1,2255 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<title>PictureCut · 高保真原型</title>
+<style>
+  :root {
+    --page: #0a0908;
+    --win: #161412;
+    --side: #1b1916;
+    --insp: #181613;
+    --canvas: #0f0e0c;
+    --raise: #211e1a;
+    --line: rgba(255,255,255,.075);
+    --line-2: rgba(255,255,255,.12);
+    --text: #ece7df;
+    --text-2: #b4aca1;
+    --text-3: #8f877c;
+    --accent: #e8a33d;
+    --accent-2: #f2b154;
+    --accent-soft: rgba(232,163,61,.10);
+    --accent-ink: #1d1508;
+    --danger: #df7462;
+    --danger-2: #ea8674;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    --mono: "SF Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    --r-xs: 3px;
+    --r-sm: 6px;
+    --r-md: 8px;
+    --r-lg: 12px;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: var(--page);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: auto;
+  }
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: default;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:disabled { opacity: .45; }
+  .glyph {
+    display: block;
+    font-family: var(--sans);
+    font-weight: 400;
+    line-height: 1;
+    user-select: none;
+    speak: never;
+  }
+  .glyph-plus { font-size: 17px; line-height: 15px; margin-top: -1px; }
+  .glyph-plus.lg { font-size: 23px; line-height: 21px; margin-top: -2px; }
+  .glyph-x { font-size: 14px; line-height: 12px; margin-top: -1px; }
+  .glyph-x.lg { font-size: 16px; line-height: 14px; }
+  img { -webkit-user-drag: none; }
+  ::selection { background: rgba(232,163,61,.28); }
+  :focus { outline: none; }
+  :focus-visible { outline: 2px solid rgba(232,163,61,.72); outline-offset: 2px; }
+
+  * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.15) transparent; }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,.14);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-track { background: transparent; }
+
+  .page {
+    min-height: 100vh;
+    min-width: 1008px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 22px 24px 34px;
+  }
+  .page-head {
+    width: min(1320px, 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+    color: var(--text-3);
+    font-size: 10px;
+    letter-spacing: .08em;
+  }
+  .ph-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .ph-mark {
+    width: 16px; height: 16px; flex: none;
+    border-radius: 4px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    display: grid; place-items: center;
+  }
+  .ph-mark svg { width: 11px; height: 11px; }
+  .ph-name { color: var(--text-2); font-weight: 600; letter-spacing: -.01em; }
+  .ph-sep { color: rgba(255,255,255,.22); }
+  .ph-right { white-space: nowrap; }
+
+  .slot {
+    position: relative;
+    flex: none;
+    width: min(1320px, 100%);
+    height: min(820px, calc(100dvh - 110px));
+    min-height: 480px;
+  }
+
+  .window {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: grid;
+    grid-template-columns: 236px minmax(0, 1fr) 288px;
+    grid-template-rows: 52px minmax(0, 1fr) 28px;
+    grid-template-areas:
+      "bar bar bar"
+      "side main insp"
+      "status status status";
+    background: var(--win);
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    isolation: isolate;
+    box-shadow: 0 28px 80px rgba(0,0,0,.62), 0 2px 10px rgba(0,0,0,.45);
+  }
+
+  /* toolbar */
+  .toolbar {
+    grid-area: bar;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px 0 18px;
+    background: #191714;
+    border-bottom: 1px solid var(--line);
+  }
+  .traffic { display: flex; align-items: center; gap: 8px; flex: none; }
+  .traffic i {
+    width: 12px; height: 12px; border-radius: 50%;
+    box-shadow: inset 0 0 0 .5px rgba(0,0,0,.24);
+  }
+  .traffic .r { background: #ff5f57; }
+  .traffic .y { background: #febc2e; }
+  .traffic .g { background: #28c840; }
+  .brand { display: flex; align-items: center; gap: 8px; margin-left: 6px; flex: none; }
+  .brand-mark {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    display: grid; place-items: center;
+  }
+  .brand-mark svg { width: 14px; height: 14px; }
+  .brand-name { font-size: 12.5px; font-weight: 600; letter-spacing: -.01em; color: var(--text); }
+  .doc-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+  .tb-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 9px;
+    border-radius: var(--r-sm);
+    border: 1px solid transparent;
+    color: var(--text-2);
+    font-size: 11.5px;
+    white-space: nowrap;
+    transition: background-color .12s ease-out, color .12s ease-out, border-color .12s ease-out;
+  }
+  .btn:hover { background: rgba(255,255,255,.055); color: var(--text); }
+  .btn:active { background: rgba(255,255,255,.085); }
+  .btn:disabled { opacity: .4; pointer-events: none; }
+  .btn.outline { border-color: var(--line-2); }
+  .btn.outline:hover { border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.04); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: transparent;
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+  .btn.primary:hover { background: var(--accent-2); color: var(--accent-ink); }
+  .btn.primary:active { background: #d79432; }
+  .btn.danger {
+    background: var(--danger);
+    border-color: transparent;
+    color: #1d100c;
+    font-weight: 600;
+  }
+  .btn.danger:hover { background: var(--danger-2); color: #1d100c; }
+  .btn.danger:active { background: #cf6857; }
+  .btn.save { height: 30px; padding: 0 12px; border-radius: 7px; }
+  .btn ryugi-icon { display: block; }
+
+  /* sidebar */
+  .sidebar {
+    grid-area: side;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--side);
+    border-right: 1px solid var(--line);
+  }
+  .side-head {
+    flex: none;
+    position: relative;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+  }
+  .side-head .t { font-size: 13px; font-weight: 600; }
+  .side-head-spacer { flex: 1; }
+  .side-head .add {
+    width: 24px; height: 24px;
+    color: var(--text-2);
+  }
+  .side-head .add:hover { color: var(--text); background: rgba(255,255,255,.06); }
+  .add-menu {
+    position: absolute;
+    top: 44px;
+    right: 8px;
+    z-index: 40;
+    width: 170px;
+    padding: 4px;
+    border-radius: 7px;
+    border: 1px solid var(--line-2);
+    background: #24211d;
+    box-shadow: 0 12px 32px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+  }
+  .add-menu[hidden] { display: none; }
+  .add-menu button {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-2);
+    font-size: 12px;
+    text-align: left;
+  }
+  .add-menu button:hover { background: rgba(255,255,255,.06); color: var(--text); }
+  .add-menu button:focus-visible { outline: 2px solid rgba(232,163,61,.65); outline-offset: -2px; }
+  .add-menu button:disabled { opacity: .4; }
+  .add-menu button.danger { color: var(--danger); }
+  .add-menu button.danger:hover { color: var(--danger-2); background: rgba(223,116,98,.10); }
+  .add-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+  .list-empty {
+    padding: 18px 12px;
+    color: var(--text-3);
+    font-size: 11px;
+    line-height: 1.7;
+    text-align: center;
+  }
+  .list-empty span { color: var(--text-3); opacity: .7; font-size: 10px; }
+  .count {
+    min-width: 17px; height: 17px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: rgba(255,255,255,.06);
+    color: var(--text-2);
+    font-size: 10px;
+    display: inline-grid;
+    place-items: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .file-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 4px 8px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .file {
+    position: relative;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px;
+    border-radius: var(--r-sm);
+    border: 1px solid transparent;
+    text-align: left;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color .12s ease-out;
+  }
+  .file:hover { background: rgba(255,255,255,.035); }
+  .file[aria-pressed="true"] { background: var(--accent-soft); }
+  .file.off img { opacity: .38; }
+  .file.off .fname { color: var(--text-3); }
+  .file.off .fmeta { opacity: .6; }
+  .file:focus-visible { outline: 2px solid rgba(232,163,61,.65); outline-offset: -2px; }
+  .file .remove {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px; height: 18px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-3);
+    opacity: .7;
+    transition: opacity .12s ease-out, background-color .12s ease-out, color .12s ease-out;
+  }
+  .file:hover .remove, .file:focus-within .remove { opacity: 1; }
+  .file .remove:hover { color: var(--text); background: rgba(255,255,255,.08); }
+  .file .remove:focus-visible { opacity: 1; outline: 2px solid rgba(232,163,61,.65); outline-offset: 0; }
+  .file img {
+    width: 40px; height: 40px;
+    border-radius: 4px;
+    object-fit: cover;
+    background: #0e0d0c;
+    outline: 1px solid rgba(255,255,255,.10);
+    outline-offset: -1px;
+  }
+  .file[aria-pressed="true"] img { outline-color: rgba(232,163,61,.8); }
+  .fmeta-wrap { min-width: 0; }
+  .fname {
+    display: block;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .file[aria-pressed="true"] .fname { color: var(--text); }
+  .fmeta {
+    display: block;
+    margin-top: 2px;
+    font-size: 10px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .fdot {
+    position: absolute;
+    left: 44px;
+    top: 12px;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 1.5px var(--side);
+  }
+  .side-foot {
+    flex: none;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    border-top: 1px solid var(--line);
+    color: var(--text-3);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* canvas */
+  .canvas {
+    grid-area: main;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--canvas);
+  }
+  .stage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+  }
+  .photo {
+    position: relative;
+    flex: none;
+    background: #0a0908;
+    outline: 1px solid rgba(255,255,255,.10);
+    outline-offset: -1px;
+  }
+  .photo > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    user-select: none;
+  }
+  .dim {
+    position: absolute;
+    z-index: 1;
+    background: rgba(8,7,6,.68);
+    pointer-events: none;
+  }
+  .dim.t { left: 0; right: 0; top: 0; height: var(--y); }
+  .dim.b { left: 0; right: 0; top: calc(var(--y) + var(--h)); bottom: 0; }
+  .dim.l { left: 0; top: var(--y); width: var(--x); height: var(--h); }
+  .dim.r { left: calc(var(--x) + var(--w)); right: 0; top: var(--y); height: var(--h); }
+
+  .crop {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: var(--w);
+    height: var(--h);
+    z-index: 2;
+    border: 1.5px solid var(--accent);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.18);
+    cursor: move;
+    touch-action: none;
+  }
+  .crop:focus { outline: none; }
+  .crop:focus-visible { outline: 2px solid rgba(232,163,61,.65); outline-offset: 3px; }
+  .crop .gl { position: absolute; background: rgba(255,255,255,.18); pointer-events: none; }
+  .crop .v1 { left: 33.333%; top: 0; bottom: 0; width: 1px; }
+  .crop .v2 { left: 66.666%; top: 0; bottom: 0; width: 1px; }
+  .crop .h1 { top: 33.333%; left: 0; right: 0; height: 1px; }
+  .crop .h2 { top: 66.666%; left: 0; right: 0; height: 1px; }
+
+  .handle {
+    position: absolute;
+    width: 28px; height: 28px;
+    border-radius: 4px;
+    background: transparent;
+    z-index: 3;
+    touch-action: none;
+  }
+  .handle span {
+    position: absolute;
+    width: 14px; height: 14px;
+    border: 0 solid var(--accent);
+  }
+  .handle.nw { left: -14px; top: -14px; cursor: nwse-resize; }
+  .handle.nw span { left: 14px; top: 14px; border-left-width: 2px; border-top-width: 2px; }
+  .handle.ne { right: -14px; top: -14px; cursor: nesw-resize; }
+  .handle.ne span { right: 14px; top: 14px; border-right-width: 2px; border-top-width: 2px; }
+  .handle.sw { left: -14px; bottom: -14px; cursor: nesw-resize; }
+  .handle.sw span { left: 14px; bottom: 14px; border-left-width: 2px; border-bottom-width: 2px; }
+  .handle.se { right: -14px; bottom: -14px; cursor: nwse-resize; }
+  .handle.se span { right: 14px; bottom: 14px; border-right-width: 2px; border-bottom-width: 2px; }
+  .handle:hover span { filter: drop-shadow(0 0 4px rgba(232,163,61,.7)); }
+  .handle:focus-visible { outline: 2px solid rgba(232,163,61,.65); outline-offset: 0; }
+
+  .canvas-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    color: var(--text-3);
+    font-size: 10px;
+    letter-spacing: .02em;
+    white-space: nowrap;
+    opacity: .75;
+    pointer-events: none;
+  }
+  .empty {
+    width: min(430px, calc(100% - 48px));
+    padding: 34px 28px 28px;
+    border: 1px dashed rgba(255,255,255,.16);
+    border-radius: 12px;
+    background: rgba(255,255,255,.012);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .empty-mark {
+    width: 44px; height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid rgba(232,163,61,.22);
+  }
+  .empty-title { margin-top: 14px; font-size: 14px; font-weight: 600; color: var(--text); }
+  .empty-sub { margin-top: 5px; color: var(--text-3); font-size: 11px; line-height: 1.6; }
+  .empty-actions { margin-top: 16px; display: flex; align-items: center; gap: 8px; }
+  .empty-note { margin-top: 14px; color: var(--text-3); font-size: 10px; opacity: .8; }
+
+  /* inspector */
+  .inspector {
+    grid-area: insp;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--insp);
+    border-left: 1px solid var(--line);
+  }
+  .apply-row {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 16px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .apply-title { color: var(--text); font-size: 11.5px; font-weight: 500; }
+  .switch {
+    position: relative;
+    width: 30px; height: 17px;
+    flex: none;
+    padding: 0;
+    border-radius: 9px;
+    border: 1px solid var(--line-2);
+    background: rgba(255,255,255,.10);
+    transition: background-color .16s ease-out, border-color .16s ease-out;
+  }
+  .switch span {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    background: #8a8178;
+    transition: transform .16s cubic-bezier(.16,1,.3,1), background-color .16s ease-out;
+  }
+  .switch[aria-checked="true"] {
+    background: rgba(232,163,61,.30);
+    border-color: rgba(232,163,61,.55);
+  }
+  .switch[aria-checked="true"] span { transform: translateX(13px); background: var(--accent); }
+  .switch:disabled { opacity: .35; pointer-events: none; }
+  .switch:focus-visible { outline: 2px solid rgba(232,163,61,.65); outline-offset: 2px; }
+  .icon-btn {
+    width: 24px; height: 24px;
+    border-radius: 5px;
+    display: grid; place-items: center;
+    color: var(--text-3);
+    transition: background-color .12s ease-out, color .12s ease-out;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,.06); color: var(--text); }
+  .icon-btn:disabled { opacity: .35; pointer-events: none; }
+  .insp-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px; }
+  .sec { padding: 14px 0 16px; border-bottom: 1px solid var(--line); }
+  .sec:last-child { border-bottom: 0; }
+  .sec-label {
+    margin-bottom: 10px;
+    color: var(--text-3);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .08em;
+  }
+
+  .ratio-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .ratio {
+    height: 58px;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 7px;
+    background: rgba(255,255,255,.025);
+    color: var(--text-2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background-color .12s ease-out, color .12s ease-out, border-color .12s ease-out;
+  }
+  .ratio:hover { background: rgba(255,255,255,.05); color: var(--text); }
+  .ratio .glyph { width: 24px; height: 24px; display: grid; place-items: center; }
+  .ratio .glyph i {
+    display: block;
+    border: 1px solid currentColor;
+    border-radius: 1.5px;
+    opacity: .7;
+  }
+  .ratio .lbl { font-size: 10.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .ratio[aria-checked="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+  .ratio[aria-checked="true"] .glyph i { opacity: 1; border-color: rgba(29,21,8,.85); }
+  .ratio[aria-checked="true"] .lbl { font-weight: 600; }
+  .ratio-hint { margin-top: 8px; color: var(--text-3); font-size: 10.5px; }
+
+  .out-size {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 17px;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  .out-size .x { color: var(--text-3); font-size: 12px; }
+  .out-size em { font-style: normal; color: var(--text-3); font-size: 10px; }
+  .out-sub { margin-top: 4px; color: var(--text-3); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+  .out-format { margin-bottom: 8px; color: var(--text-2); font-size: 11px; }
+
+  .sub-label { margin: 14px 0 6px; color: var(--text-3); font-size: 10.5px; }
+  .seg {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    background: #131110;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: var(--r-sm);
+  }
+  .seg button {
+    flex: 1;
+    height: 24px;
+    border-radius: 4px;
+    color: var(--text-3);
+    font-size: 11px;
+    transition: background-color .12s ease-out, color .12s ease-out;
+  }
+  .seg button:hover { color: var(--text-2); }
+  .seg button[aria-checked="true"] { background: #2b2722; color: var(--text); }
+  .seg.disabled { opacity: 1; }
+  .quality-note { margin-top: 6px; color: var(--text-3); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+  .amber { color: var(--accent); }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 24px;
+    color: var(--text-2);
+    font-size: 11.5px;
+    cursor: default;
+  }
+  .check input {
+    appearance: none;
+    width: 14px; height: 14px;
+    flex: none;
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: var(--r-xs);
+    background: #131110;
+    display: grid;
+    place-items: center;
+    cursor: default;
+  }
+  .check input:checked { background: var(--accent); border-color: var(--accent); }
+  .check input:checked::after {
+    content: "";
+    width: 8px; height: 5px;
+    border-left: 1.5px solid var(--accent-ink);
+    border-bottom: 1.5px solid var(--accent-ink);
+    transform: rotate(-45deg) translateY(-1px);
+  }
+  .path {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 8px;
+    border-radius: 5px;
+    background: #131110;
+    border: 1px solid rgba(255,255,255,.07);
+    color: var(--text-2);
+    font: 10.5px var(--mono);
+    overflow: hidden;
+  }
+  .path > ryugi-icon { flex: none; color: var(--text-3); }
+  .path .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .path input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-2);
+    font: inherit;
+    padding: 0;
+  }
+  .path input:focus-visible { outline: none; }
+  .path:focus-within { border-color: rgba(232,163,61,.45); }
+  .field-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 14px 0 6px;
+    color: var(--text-3);
+    font-size: 10.5px;
+  }
+  .auto-tag {
+    padding: 1px 5px;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: var(--r-xs);
+    font-size: 9px;
+    color: var(--text-3);
+  }
+  .fname-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 8px 8px 10px;
+    border-radius: var(--r-sm);
+    background: #131110;
+    border: 1px solid rgba(255,255,255,.07);
+  }
+  .fname-box .name {
+    flex: 1;
+    min-width: 0;
+    font: 10.5px/1.55 var(--mono);
+    color: var(--text-2);
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+  .copy {
+    width: 24px; height: 24px;
+    flex: none;
+    border-radius: 4px;
+    display: grid; place-items: center;
+    color: var(--text-3);
+    transition: background-color .12s ease-out, color .12s ease-out;
+  }
+  .copy:hover { background: rgba(255,255,255,.06); color: var(--text); }
+  .copy:disabled { opacity: .35; pointer-events: none; }
+  .insp-foot {
+    flex: none;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 16px;
+    border-top: 1px solid var(--line);
+    color: var(--text-3);
+    font-size: 10.5px;
+  }
+  .insp-foot ryugi-icon { color: var(--text-3); }
+
+  /* status */
+  .status {
+    grid-area: status;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 14px;
+    background: #141210;
+    border-top: 1px solid var(--line);
+    color: var(--text-3);
+    font-size: 10.5px;
+  }
+  .status-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .status-left ryugi-icon { flex: none; }
+  .status-left .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-2);
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* toast */
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 44px;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 7px;
+    background: #27231e;
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 10px 28px rgba(0,0,0,.42);
+    color: var(--text-2);
+    font-size: 11.5px;
+    white-space: nowrap;
+    transform: translate(-50%, 8px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .18s cubic-bezier(.16,1,.3,1), opacity .18s ease-out;
+  }
+  .toast.show { transform: translate(-50%, 0); opacity: 1; }
+  .toast ryugi-icon { color: var(--accent); flex: none; }
+
+  /* save sheet */
+  .scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    background: rgba(6,5,4,.52);
+    opacity: 0;
+    transition: opacity .18s ease-out;
+  }
+  .scrim.open { opacity: 1; }
+  .sheet {
+    position: absolute;
+    top: 52px;
+    left: 50%;
+    z-index: 21;
+    width: 480px;
+    max-height: min(560px, calc(100% - 80px));
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255,255,255,.10);
+    border-top: 0;
+    border-radius: 0 0 var(--r-lg) var(--r-lg);
+    background: #1e1b17;
+    box-shadow: 0 28px 70px rgba(0,0,0,.6);
+    opacity: 0;
+    transform: translate(-50%, -14px);
+    transition: transform .2s cubic-bezier(.16,1,.3,1), opacity .2s ease-out;
+  }
+  .sheet.open { opacity: 1; transform: translate(-50%, 0); }
+  .sheet-head {
+    flex: none;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .sheet-head h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+  .sheet-head p { margin: 4px 0 0; font-size: 10.5px; color: var(--text-3); font-family: var(--mono); }
+  .sheet-body { min-height: 0; overflow-y: auto; padding: 16px 18px; }
+  .prog-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    color: var(--text-3);
+    font-size: 10.5px;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .bar {
+    width: 100%; height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,.08);
+    overflow: hidden;
+  }
+  .bar i {
+    display: block;
+    width: 100%; height: 100%;
+    background: var(--accent);
+    transform-origin: left center;
+    transform: scaleX(0);
+    transition: transform .16s linear;
+  }
+  .save-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .save-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--text-2);
+    font: 10.5px var(--mono);
+  }
+  .save-item .mark {
+    width: 14px; height: 14px;
+    flex: none;
+    border-radius: 50%;
+    display: grid; place-items: center;
+  }
+  .save-item .mark ryugi-icon { display: none; }
+  .save-item[data-state="pending"] .mark::before {
+    content: ""; width: 4px; height: 4px; border-radius: 50%;
+    background: rgba(255,255,255,.22);
+  }
+  .save-item[data-state="active"] .mark::before {
+    content: ""; width: 10px; height: 10px;
+    border: 1.5px solid rgba(255,255,255,.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  .save-item[data-state="done"] .mark { background: var(--accent); color: var(--accent-ink); }
+  .save-item[data-state="done"] .mark ryugi-icon { display: block; }
+  .save-item .sname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .save-more { color: var(--text-3); font-size: 10.5px; padding-left: 22px; }
+  .sheet-note { margin: 14px 0 0; color: var(--text-3); font-size: 10px; line-height: 1.5; }
+  .sheet-foot {
+    flex: none;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--line);
+  }
+  .sheet-foot .btn { min-width: 64px; justify-content: center; }
+  .sum-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 12px;
+    color: var(--text-3);
+    font-size: 10.5px;
+  }
+  .sum-head strong {
+    color: var(--text);
+    font-size: 17px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+  }
+  .sum-meta {
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255,255,255,.02);
+  }
+  .sum-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 3px 0;
+    font-size: 10.5px;
+  }
+  .sum-row > span:first-child { flex: none; color: var(--text-3); }
+  .sum-row > span:last-child {
+    min-width: 0;
+    color: var(--text-2);
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .summary-list {
+    margin-top: 12px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+  .sum-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 0;
+  }
+  .sum-item .sname {
+    min-width: 0;
+    color: var(--text-2);
+    font: 10px/1.4 var(--mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .stag {
+    flex: none;
+    padding: 1px 5px;
+    border: 1px solid var(--line-2);
+    border-radius: 3px;
+    color: var(--text-3);
+    font-size: 9px;
+    line-height: 1.4;
+  }
+  .stag.custom { border-color: rgba(232,163,61,.45); color: var(--accent); }
+  .stag.skip { border-color: var(--line-2); color: var(--text-3); }
+  .sum-item.skip { opacity: .55; }
+  .sum-item.skip .sname { color: var(--text-3); }
+  .summary-more { padding: 3px 0 0; color: var(--text-3); font-size: 10px; }
+  .done-view { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 18px 22px; }
+  .done-mark {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--accent-soft);
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  .done-view h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text); }
+  .done-view p { margin: 6px 0 0; font: 10.5px/1.5 var(--mono); color: var(--text-3); word-break: break-all; }
+
+  /* confirm dialog */
+  #confirm-scrim { z-index: 30; }
+  .confirm {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 31;
+    width: min(368px, calc(100% - 48px));
+    padding: 20px;
+    border: 1px solid rgba(255,255,255,.11);
+    border-radius: var(--r-lg);
+    background: #1e1b17;
+    box-shadow: 0 26px 64px rgba(0,0,0,.62), 0 2px 8px rgba(0,0,0,.4);
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.985);
+    transition: transform .18s cubic-bezier(.16,1,.3,1), opacity .18s ease-out;
+  }
+  .confirm.open { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .confirm h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text); }
+  .confirm p { margin: 7px 0 0; color: var(--text-2); font-size: 11.5px; line-height: 1.65; }
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 20px;
+  }
+  .confirm-actions .btn { min-width: 64px; justify-content: center; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: .01ms !important;
+      animation-duration: .01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="page-head">
+    <div class="ph-left">
+      <span class="ph-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>
+        </svg>
+      </span>
+      <span class="ph-name" lang="en">PictureCut</span>
+      <span class="ph-sep">/</span>
+      <span>高保真原型</span>
+    </div>
+    <div class="ph-right">macOS 14+ · 桌面布局 · 深色</div>
+  </header>
+
+  <div class="slot" id="slot">
+    <div class="window" id="window">
+      <header class="toolbar">
+        <span class="traffic" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i></span>
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>
+            </svg>
+          </span>
+          <span class="brand-name" lang="en">PictureCut</span>
+        </div>
+        <div class="doc-title" id="doc-title" lang="en">city.jpg</div>
+        <div class="tb-actions">
+          <button class="btn primary save" id="save-all" type="button" aria-label="保存参与保存的图片">
+            <ryugi-icon name="save" size="13"></ryugi-icon>
+            保存 <span id="save-count">3</span> 张
+          </button>
+        </div>
+      </header>
+
+      <aside class="sidebar">
+        <div class="side-head">
+          <span class="t">本次图片</span>
+          <span class="count" id="count">3</span>
+          <span class="side-head-spacer"></span>
+          <button class="icon-btn add" id="add-btn" type="button" aria-label="添加图片" aria-haspopup="menu" aria-expanded="false" title="添加 JPG/JPEG、PNG 图片或文件夹">
+            <span class="glyph glyph-plus" aria-hidden="true">+</span>
+          </button>
+          <div class="add-menu" id="add-menu" role="menu" aria-label="添加图片" hidden>
+            <button type="button" role="menuitem" id="add-image">打开图片…</button>
+            <button type="button" role="menuitem" id="add-folder">打开文件夹…</button>
+            <div class="add-sep" role="separator"></div>
+            <button type="button" role="menuitem" id="add-clear" class="danger">清空列表</button>
+          </div>
+        </div>
+        <input id="image-input" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple hidden />
+        <input id="folder-input" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" webkitdirectory multiple hidden />
+        <div class="file-list" id="file-list" role="list" aria-label="本次图片列表"></div>
+        <div class="side-foot" id="side-foot">3 张 · 3.2 MB</div>
+      </aside>
+
+      <main class="canvas" id="canvas">
+        <div class="stage" id="stage">
+          <div class="empty" id="empty" hidden>
+            <span class="empty-mark" aria-hidden="true"><span class="glyph glyph-plus lg">+</span></span>
+            <div class="empty-title">把图片加入本次列表</div>
+            <div class="empty-sub">打开图片或文件夹。仅支持 JPG/JPEG、PNG。</div>
+            <div class="empty-actions">
+              <button class="btn outline" id="empty-open" type="button">打开图片</button>
+              <button class="btn outline" id="empty-folder" type="button">打开文件夹</button>
+            </div>
+            <div class="empty-note">移除图片不会删除源文件。</div>
+          </div>
+          <div class="photo" id="photo" style="width: 744px; height: 347px;">
+            <img id="photo-img" alt="" draggable="false" decoding="async" />
+            <div class="dim t"></div>
+            <div class="dim b"></div>
+            <div class="dim l"></div>
+            <div class="dim r"></div>
+            <div class="crop" id="crop" tabindex="0" role="group" aria-label="裁切框">
+              <div class="gl v1"></div>
+              <div class="gl v2"></div>
+              <div class="gl h1"></div>
+              <div class="gl h2"></div>
+              <button class="handle nw" type="button" data-corner="nw" aria-label="缩放裁切框左上角"><span></span></button>
+              <button class="handle ne" type="button" data-corner="ne" aria-label="缩放裁切框右上角"><span></span></button>
+              <button class="handle sw" type="button" data-corner="sw" aria-label="缩放裁切框左下角"><span></span></button>
+              <button class="handle se" type="button" data-corner="se" aria-label="缩放裁切框右下角"><span></span></button>
+            </div>
+          </div>
+        </div>
+        <div class="canvas-hint">拖动框内移动 · 拖四角缩放 · 方向键微调</div>
+      </main>
+
+      <aside class="inspector">
+        <div class="apply-row">
+          <span class="apply-title" id="apply-label">是否参与保存</span>
+          <button class="switch" id="apply-toggle" type="button" role="switch" aria-checked="true" aria-labelledby="apply-label">
+            <span></span>
+          </button>
+        </div>
+        <div class="insp-scroll">
+          <section class="sec">
+            <div class="sec-label">比例 · 当前图片</div>
+            <div class="ratio-grid" id="ratio-grid" role="radiogroup" aria-label="裁切比例"></div>
+            <div class="ratio-hint" id="ratio-hint">16:9 · 桌面壁纸</div>
+          </section>
+
+          <section class="sec">
+            <div class="sec-label">输出</div>
+            <div class="out-format" id="output-format">JPEG · 跟随原图</div>
+            <div class="out-size"><span id="crop-size">2400 × 1350</span><em id="crop-unit">px</em></div>
+            <div class="out-sub" id="out-sub">原图 2400 × 1489 · 按原始像素裁切</div>
+
+            <div class="sub-label" id="quality-label" title="标准压缩优先减小文件；高档保留更多细节，PNG 高档为无损保存">质量 · 全部图片</div>
+            <div class="seg" id="quality-seg" role="radiogroup" aria-label="输出质量">
+              <button id="quality-compressed" type="button" role="radio" aria-checked="true" title="文件较小，可能出现压缩痕迹">标准压缩</button>
+              <button id="quality-high" type="button" role="radio" aria-checked="false" title="保留更多细节，文件较大，仍会有损压缩">高质量</button>
+            </div>
+            <div class="quality-note" id="quality-note">文件较小</div>
+          </section>
+
+          <section class="sec">
+            <div class="sec-label">保存</div>
+            <label class="check">
+              <input type="checkbox" id="in-place" checked />
+              <span>与原图相同目录</span>
+            </label>
+            <div class="path">
+              <ryugi-icon name="folder" size="12"></ryugi-icon>
+              <span class="txt" id="path-text" title="原图所在目录">原图所在目录</span>
+              <input id="out-path" value="~/Desktop/裁剪输出" aria-label="输出目录" hidden />
+            </div>
+            <div class="field-label">文件名 <span class="auto-tag">自动</span></div>
+            <div class="fname-box">
+              <span class="name" id="filename" lang="en">city_16x9_q80_20261117-103842.jpg</span>
+              <button class="copy" id="copy-name" type="button" aria-label="复制文件名" title="复制文件名">
+                <ryugi-icon name="copy" size="13"></ryugi-icon>
+              </button>
+            </div>
+          </section>
+        </div>
+        <div class="insp-foot">
+          <ryugi-icon name="lock" size="12"></ryugi-icon>
+          <span>源文件不会被修改</span>
+        </div>
+      </aside>
+
+      <footer class="status">
+        <div class="status-left">
+          <ryugi-icon name="folder" size="11"></ryugi-icon>
+          <span class="txt">仅支持 JPG/JPEG、PNG</span>
+        </div>
+        <div class="status-right">
+          <span id="status-crop">16:9 · 2400 × 1350 px</span>
+        </div>
+      </footer>
+
+      <div class="toast" id="toast" role="status" aria-live="polite">
+        <ryugi-icon name="check" size="13" id="toast-check"></ryugi-icon>
+        <ryugi-icon name="info" size="13" id="toast-info" hidden></ryugi-icon>
+        <span id="toast-text"></span>
+      </div>
+
+      <div class="scrim" id="scrim" hidden></div>
+      <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+        <header class="sheet-head">
+          <div>
+            <h2 id="sheet-title">保存 3 张图片</h2>
+            <p id="sheet-sub">按各图裁切设置保存 · 源文件不改</p>
+          </div>
+          <button class="icon-btn" id="sheet-close" type="button" aria-label="关闭" title="关闭">
+            <span class="glyph glyph-x lg" aria-hidden="true">×</span>
+          </button>
+        </header>
+        <div class="sheet-body" id="sheet-summary-view">
+          <div class="sum-head">
+            <span>将保存</span>
+            <strong id="summary-count">3 张图片</strong>
+          </div>
+          <div class="sum-meta">
+            <div class="sum-row"><span>格式</span><span id="summary-format">JPEG（跟随原图）</span></div>
+            <div class="sum-row"><span>比例</span><span id="summary-ratio">16:9 · 原始像素</span></div>
+            <div class="sum-row"><span>质量</span><span id="summary-quality">JPEG 标准压缩 · PNG 无损</span></div>
+            <div class="sum-row"><span>裁切</span><span id="summary-crops">3 张手动 · 5 张默认</span></div>
+            <div class="sum-row"><span>保存到</span><span id="summary-dest">原图所在目录</span></div>
+          </div>
+          <div class="summary-list" id="summary-list"></div>
+          <p class="sheet-note">不参与保存的图片不会写入。未手动调整的图片按各自比例居中裁切，源文件不会被修改。</p>
+        </div>
+        <div class="sheet-body" id="sheet-progress-view" hidden>
+          <div class="prog-row">
+            <span id="sheet-count">0 / 8</span>
+            <span id="sheet-pct">0%</span>
+          </div>
+          <div class="bar"><i id="sheet-bar"></i></div>
+          <div class="save-list" id="save-list"></div>
+          <p class="sheet-note">保存时可继续使用其他应用，源文件不会被修改。</p>
+        </div>
+        <div class="sheet-body done-view" id="sheet-done-view" hidden>
+          <span class="done-mark"><ryugi-icon name="check" size="18"></ryugi-icon></span>
+          <h3 id="done-title">已保存 8 个文件</h3>
+          <p id="done-path">原图所在目录</p>
+        </div>
+        <footer class="sheet-foot" id="sheet-summary-foot">
+          <button class="btn outline" id="summary-cancel" type="button">取消</button>
+          <button class="btn primary" id="sheet-start" type="button">保存 3 张</button>
+        </footer>
+        <footer class="sheet-foot" id="sheet-progress-foot" hidden>
+          <button class="btn outline" id="sheet-cancel" type="button">取消</button>
+        </footer>
+        <footer class="sheet-foot" id="sheet-done-foot" hidden>
+          <button class="btn outline" id="sheet-reveal" type="button">在 Finder 中显示</button>
+          <button class="btn outline" id="sheet-finish-clear" type="button" title="关闭摘要并清空本次列表，源文件保留">完成并清空</button>
+          <button class="btn primary" id="sheet-finish" type="button">完成</button>
+        </footer>
+      </section>
+
+      <div class="scrim" id="confirm-scrim" hidden></div>
+      <section class="confirm" id="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg" hidden>
+        <h2 id="confirm-title">清空本次图片？</h2>
+        <p id="confirm-msg"></p>
+        <div class="confirm-actions">
+          <button class="btn outline" id="confirm-cancel" type="button">取消</button>
+          <button class="btn danger" id="confirm-ok" type="button">清空</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script src="ryugi-icons.js"></script>
+<script>
+  const RAW_DOCS = [
+    { id: 'city', name: 'city.jpg', w: 2400, h: 1489, bytes: 898405, fmt: 'JPEG' },
+    { id: 'mountain-lake', name: 'mountain-lake.jpg', w: 2400, h: 1617, bytes: 575556, fmt: 'JPEG' },
+    { id: 'coffee', name: 'coffee.png', w: 2400, h: 1602, bytes: 1841607, fmt: 'PNG' },
+  ];
+  const DOCS = RAW_DOCS.map((d) => ({
+    ...d,
+    src: 'assets/' + d.name,
+    thumb: 'assets/thumb-' + d.name.replace(/\.(jpe?g|png)$/i, '.jpg'),
+  }));
+
+  const RATIOS = [
+    { key: '16:9', w: 16, h: 9, use: '桌面壁纸', gw: 22, gh: 12 },
+    { key: '9:16', w: 9, h: 16, use: '手机壁纸', gw: 12, gh: 21 },
+    { key: '9:19.5', w: 9, h: 19.5, use: '全面屏手机', gw: 10, gh: 22 },
+    { key: '1:1', w: 1, h: 1, use: '头像', gw: 17, gh: 17 },
+    { key: '4:3', w: 4, h: 3, use: '平板', gw: 21, gh: 16 },
+    { key: '3:4', w: 3, h: 4, use: '竖版', gw: 16, gh: 21 },
+    { key: '3:2', w: 3, h: 2, use: '相机', gw: 22, gh: 15 },
+    { key: '2:3', w: 2, h: 3, use: '竖拍', gw: 15, gh: 22 },
+    { key: '21:9', w: 21, h: 9, use: '超宽屏', gw: 24, gh: 10 },
+  ];
+
+  const STAMP = '20261117-103842';
+  let active = DOCS.slice();
+  const PICTURES = '原图所在目录';
+  let importId = 0;
+  let importing = false;
+
+  const state = {
+    selectedId: 'city',
+    ratios: new Map(),
+    quality: 'compressed',
+    inPlace: true,
+    outDir: '~/Desktop/裁剪输出',
+    crops: new Map(),
+    skipped: new Set(),
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const photo = $('photo');
+  const stage = $('stage');
+  const img = $('photo-img');
+  const cropEl = $('crop');
+  const fileList = $('file-list');
+  const ratioGrid = $('ratio-grid');
+  const emptyEl = $('empty');
+  const canvasHint = document.querySelector('.canvas-hint');
+
+  function doc() {
+    return active.find((d) => d.id === state.selectedId) || active[0] || null;
+  }
+
+  function isApplied(d) {
+    return Boolean(d) && !state.skipped.has(d.id);
+  }
+
+  function appliedDocs() {
+    return active.filter(isApplied);
+  }
+
+  function totalBytes() {
+    return active.reduce((sum, d) => sum + d.bytes, 0);
+  }
+
+  function ratio(d = doc()) {
+    return RATIOS.find((r) => r.key === state.ratios.get(d?.id)) || RATIOS[0];
+  }
+
+  function clamp(v, lo, hi) {
+    return Math.min(hi, Math.max(lo, v));
+  }
+
+  function mb(bytes) {
+    return (bytes / 1024 / 1024).toFixed(1);
+  }
+
+  function maxCrop(d, r) {
+    const value = r.w / r.h;
+    let cw;
+    let ch;
+    if (d.w / d.h > value) {
+      ch = d.h;
+      cw = Math.round(d.h * value);
+    } else {
+      cw = d.w;
+      ch = Math.round(d.w / value);
+    }
+    return {
+      x: (d.w - cw) / 2 / d.w,
+      y: (d.h - ch) / 2 / d.h,
+      w: cw / d.w,
+      h: ch / d.h,
+      custom: false,
+    };
+  }
+
+  function ensureCrop(d) {
+    if (!d) return null;
+    let c = state.crops.get(d.id);
+    if (!c) {
+      c = maxCrop(d, ratio(d));
+      state.crops.set(d.id, c);
+    }
+    return c;
+  }
+
+  function cropPx(d, c) {
+    return { w: Math.round(c.w * d.w), h: Math.round(c.h * d.h) };
+  }
+
+  function isCustom(d, c) {
+    const m = maxCrop(d, ratio(d));
+    return (
+      Math.abs(c.x - m.x) > 0.0005 ||
+      Math.abs(c.y - m.y) > 0.0005 ||
+      Math.abs(c.w - m.w) > 0.0005 ||
+      Math.abs(c.h - m.h) > 0.0005
+    );
+  }
+
+  function filename(d) {
+    if (!d) return '';
+    const ext = (d.name.match(/\.[^.]+$/) || ['.jpg'])[0];
+    const stem = d.name.slice(0, -ext.length);
+    const qualityTag = state.quality === 'compressed' ? (d.fmt === 'PNG' ? 'compressed_' : 'q80_') : '';
+    return stem + '_' + ratio(d).key.replace(':', 'x') + '_' + qualityTag + STAMP + ext;
+  }
+
+  function buildFileList() {
+    fileList.innerHTML = '';
+    active.forEach((d) => {
+      const b = document.createElement('div');
+      b.className = 'file';
+      b.setAttribute('role', 'button');
+      b.tabIndex = 0;
+      b.setAttribute('aria-pressed', String(d.id === state.selectedId));
+      b.dataset.id = d.id;
+      b.title = d.name;
+      if (!isApplied(d)) b.classList.add('off');
+      b.innerHTML =
+        '<img alt="" loading="lazy" />' +
+        '<span class="fmeta-wrap"><span class="fname"></span><span class="fmeta"></span></span>' +
+        '<button class="remove" type="button" title="从列表移除，不删除源文件"><span class="glyph glyph-x" aria-hidden="true">×</span></button>' +
+        '<span class="fdot" hidden></span>';
+      const im = b.querySelector('img');
+      im.src = d.thumb;
+      im.alt = d.name;
+      b.querySelector('.fname').textContent = d.name;
+      b.querySelector('.fmeta').textContent = d.w + ' × ' + d.h + ' · ' + mb(d.bytes) + ' MB';
+      const rm = b.querySelector('.remove');
+      rm.setAttribute('aria-label', '从列表移除 ' + d.name + '，不删除源文件');
+      b.addEventListener('click', (e) => {
+        if (e.target.closest('.remove')) return;
+        selectDoc(d.id);
+      });
+      b.addEventListener('keydown', (e) => {
+        if (e.target.closest('.remove')) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          selectDoc(d.id);
+        }
+      });
+      rm.addEventListener('click', (e) => {
+        e.stopPropagation();
+        askRemove(d.id, rm);
+      });
+      fileList.appendChild(b);
+    });
+    if (!active.length) {
+      const hint = document.createElement('div');
+      hint.className = 'list-empty';
+      hint.innerHTML = '暂无图片<br><span>点 + 添加</span>';
+      fileList.appendChild(hint);
+    }
+  }
+
+  function buildRatioGrid() {
+    ratioGrid.innerHTML = '';
+    RATIOS.forEach((r) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ratio';
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', String(r.key === ratio().key));
+      b.setAttribute('aria-label', r.key + '，' + r.use);
+      b.dataset.key = r.key;
+      b.innerHTML =
+        '<span class="glyph"><i style="width:' + r.gw + 'px;height:' + r.gh + 'px"></i></span>' +
+        '<span class="lbl">' + r.key + '</span>';
+      b.addEventListener('click', () => setRatio(r.key));
+      ratioGrid.appendChild(b);
+    });
+  }
+
+  function selectDoc(id) {
+    const d = active.find((x) => x.id === id);
+    if (!d || id === state.selectedId) return;
+    state.selectedId = id;
+    ensureCrop(d);
+    updateAll();
+  }
+
+  function addOne() {
+    $('image-input').click();
+  }
+
+  function addAll() {
+    $('folder-input').click();
+  }
+
+  async function importFiles(files) {
+    if (importing) return;
+    importing = true;
+    $('save-all').disabled = true;
+    $('side-foot').textContent = '正在读取图片…';
+    ['add-btn', 'empty-open', 'empty-folder'].forEach((id) => { $(id).disabled = true; });
+    const added = [];
+    let skipped = 0;
+    for (const file of files) {
+      let src;
+      try {
+        if (!/\.(jpe?g|png)$/i.test(file.name)) {
+          skipped++;
+          continue;
+        }
+        const header = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+        const fmt = /\.png$/i.test(file.name) ? 'PNG' : 'JPEG';
+        const validHeader = fmt === 'PNG'
+          ? [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => header[i] === byte)
+          : header[0] === 255 && header[1] === 216 && header[2] === 255;
+        if (!validHeader) {
+          skipped++;
+          continue;
+        }
+        src = URL.createObjectURL(file);
+        const preview = new Image();
+        preview.src = src;
+        await preview.decode();
+        const d = {
+          id: 'import-' + ++importId, name: file.name,
+          w: preview.naturalWidth, h: preview.naturalHeight,
+          bytes: file.size, fmt, src, thumb: src,
+        };
+        active.push(d);
+        added.push(d);
+      } catch {
+        if (src) URL.revokeObjectURL(src);
+        skipped++;
+      }
+    }
+    importing = false;
+    ['add-btn', 'empty-open', 'empty-folder'].forEach((id) => { $(id).disabled = false; });
+    if (added.length) {
+      const first = added.find((d) => active.includes(d));
+      if (first) state.selectedId = first.id;
+      buildFileList();
+    }
+    updateAll();
+    const messages = ['已添加 ' + added.length + ' 张'];
+    if (skipped) messages.push('跳过 ' + skipped + ' 个文件，仅支持可读取的 JPG/JPEG、PNG');
+    showToast(messages.join(' · '), skipped ? 'info' : undefined);
+  }
+
+  function removeDoc(id) {
+    const i = active.findIndex((d) => d.id === id);
+    if (i < 0) return;
+    const wasSelected = state.selectedId === id;
+    const [removed] = active.splice(i, 1);
+    if (removed.src.startsWith('blob:')) URL.revokeObjectURL(removed.src);
+    state.ratios.delete(id);
+    state.crops.delete(id);
+    state.skipped.delete(id);
+    if (!active.length) {
+      state.selectedId = null;
+    } else if (wasSelected) {
+      state.selectedId = active[Math.min(i, active.length - 1)].id;
+      ensureCrop(doc());
+    }
+    buildFileList();
+    updateAll();
+    const sel = fileList.querySelector('.file[aria-pressed="true"]');
+    (sel || $('add-btn')).focus({ preventScroll: true });
+    showToast('已从列表移除，源文件未删除');
+  }
+
+  function askRemove(id, trigger) {
+    const d = active.find((x) => x.id === id);
+    if (!d) return;
+    openConfirm({
+      title: '移除这张图片？',
+      message: '「' + d.name + '」会从本次列表移除。源文件不会被删除。',
+      confirmLabel: '移除',
+      returnFocus: trigger,
+      onConfirm: () => removeDoc(id)
+    });
+  }
+
+  function clearDocs() {
+    if (!active.length) return;
+    active.forEach((d) => {
+      if (d.src.startsWith('blob:')) URL.revokeObjectURL(d.src);
+    });
+    active = [];
+    state.ratios.clear();
+    state.crops.clear();
+    state.skipped.clear();
+    state.selectedId = null;
+    buildFileList();
+    updateAll();
+    showToast('列表已清空，源文件未删除');
+  }
+
+  function askClear() {
+    if (!active.length) return;
+    openConfirm({
+      title: '清空本次图片？',
+      message: '列表中的 ' + active.length + ' 张图片和裁切设置会从本次列表移除。源文件不会被删除。',
+      confirmLabel: '清空',
+      returnFocus: $('add-btn'),
+      onConfirm: clearDocs
+    });
+  }
+
+  function toggleAddMenu(open) {
+    $('add-menu').hidden = !open;
+    $('add-btn').setAttribute('aria-expanded', String(open));
+    $('add-clear').disabled = !active.length;
+    if (open) $('add-image').focus({ preventScroll: true });
+  }
+
+  function setRatio(key) {
+    if (!doc() || key === ratio().key) return;
+    applyRatio(key);
+  }
+
+  function applyRatio(key) {
+    const d = doc();
+    state.ratios.set(d.id, key);
+    state.crops.delete(d.id);
+    ensureCrop(d);
+    updateAll();
+  }
+
+  function customCount(docs = active) {
+    return docs.filter((d) => {
+      const c = state.crops.get(d.id);
+      return c && isCustom(d, c);
+    }).length;
+  }
+
+  function toggleApplied() {
+    const d = doc();
+    if (!d) return;
+    if (state.skipped.has(d.id)) state.skipped.delete(d.id);
+    else state.skipped.add(d.id);
+    updateFileList();
+    updateInspector();
+    $('save-all').disabled = importing || !appliedDocs().length;
+    showToast(isApplied(d) ? '这张图已参与保存' : '这张图不参与保存，裁切设置已保留');
+  }
+
+  function updateAll() {
+    updateFileList();
+    updateRatioGrid();
+    if (!active.length) {
+      updateEmptyState();
+      return;
+    }
+    photo.hidden = false;
+    emptyEl.hidden = true;
+    canvasHint.hidden = false;
+    $('copy-name').disabled = false;
+    $('save-all').disabled = false;
+    updateImage();
+    updateCropVars();
+    updateInspector();
+  }
+
+  function updateEmptyState() {
+    photo.hidden = true;
+    emptyEl.hidden = false;
+    canvasHint.hidden = true;
+    $('doc-title').textContent = '未选择图片';
+    $('doc-title').title = '';
+    $('crop-size').textContent = '未选择';
+    $('crop-unit').hidden = true;
+    $('out-sub').textContent = '添加图片后显示';
+    $('output-format').textContent = '格式跟随原图';
+    $('quality-high').textContent = '高质量';
+    $('quality-note').textContent = '';
+    $('quality-high').disabled = true;
+    $('quality-compressed').disabled = true;
+    $('quality-high').setAttribute('aria-checked', 'false');
+    $('quality-compressed').setAttribute('aria-checked', 'false');
+    $('quality-seg').classList.add('disabled');
+    $('filename').textContent = '未选择';
+    $('filename').removeAttribute('title');
+    $('apply-toggle').disabled = true;
+    $('apply-toggle').setAttribute('aria-checked', 'false');
+    $('copy-name').disabled = true;
+    $('save-all').disabled = true;
+    $('save-count').textContent = '0';
+    $('count').textContent = '0';
+    $('side-foot').textContent = '0 张';
+    $('status-crop').textContent = '未选择图片';
+  }
+
+  function updateFileList() {
+    fileList.querySelectorAll('.file').forEach((b) => {
+      const d = active.find((x) => x.id === b.dataset.id);
+      if (!d) return;
+      const selected = d.id === state.selectedId;
+      b.setAttribute('aria-pressed', String(selected));
+      b.classList.toggle('off', !isApplied(d));
+      const c = ensureCrop(d);
+      b.querySelector('.fdot').hidden = !isCustom(d, c);
+    });
+  }
+
+  function updateRatioGrid() {
+    ratioGrid.querySelectorAll('.ratio').forEach((b) => {
+      b.disabled = !doc();
+      b.setAttribute('aria-checked', String(Boolean(doc()) && b.dataset.key === ratio().key));
+    });
+    $('ratio-hint').textContent = doc() ? ratio().key + ' · ' + ratio().use : '添加图片后选择比例';
+  }
+
+  function updateImage() {
+    const d = doc();
+    if (!d) return;
+    if (img.dataset.src !== d.src) {
+      img.dataset.src = d.src;
+      img.src = d.src;
+      img.alt = d.name + ' 预览';
+    }
+    photo.style.aspectRatio = d.w + ' / ' + d.h;
+    layoutPhoto();
+  }
+
+  function layoutPhoto() {
+    const d = doc();
+    if (!d || photo.hidden) return;
+    const maxW = Math.max(80, stage.clientWidth - 64);
+    const maxH = Math.max(80, stage.clientHeight - 64);
+    const s = Math.min(maxW / d.w, maxH / d.h);
+    photo.style.width = Math.max(40, Math.round(d.w * s)) + 'px';
+    photo.style.height = Math.max(40, Math.round(d.h * s)) + 'px';
+  }
+
+  function updateCropVars() {
+    const d = doc();
+    if (!d) return;
+    const c = ensureCrop(d);
+    const px = cropPx(d, c);
+    photo.style.setProperty('--x', (c.x * 100).toFixed(4) + '%');
+    photo.style.setProperty('--y', (c.y * 100).toFixed(4) + '%');
+    photo.style.setProperty('--w', (c.w * 100).toFixed(4) + '%');
+    photo.style.setProperty('--h', (c.h * 100).toFixed(4) + '%');
+    cropEl.setAttribute('aria-label', '裁切框，' + ratio().key + '，' + px.w + ' × ' + px.h + ' 像素');
+  }
+
+  function updateInspector() {
+    const d = doc();
+    if (!d) return;
+    const c = ensureCrop(d);
+    const px = cropPx(d, c);
+    const isPng = d.fmt === 'PNG';
+
+    $('output-format').textContent = d.fmt + ' · 跟随原图';
+    $('crop-size').textContent = px.w + ' × ' + px.h;
+    $('crop-unit').hidden = false;
+    $('out-sub').textContent = '原图 ' + d.w + ' × ' + d.h + ' · 按原始像素裁切';
+
+    const qh = $('quality-high');
+    const qc = $('quality-compressed');
+    qh.disabled = false;
+    qc.disabled = false;
+    qh.textContent = isPng ? '无损保存' : '高质量';
+    qh.title = isPng ? '保留全部颜色和透明背景，不做有损压缩' : '保留更多细节，文件较大，仍会有损压缩';
+    qc.title = isPng ? '文件较小，保留透明背景，可能影响渐变和细节' : '文件较小，可能出现压缩痕迹';
+    qh.setAttribute('aria-checked', String(state.quality === 'high'));
+    qc.setAttribute('aria-checked', String(state.quality === 'compressed'));
+    $('quality-seg').classList.remove('disabled');
+
+    if (isPng && state.quality === 'high') {
+      $('quality-note').textContent = '保留全部颜色 · 保留透明背景';
+    } else if (state.quality === 'high') {
+      $('quality-note').textContent = '保留更多细节';
+    } else {
+      $('quality-note').textContent = '文件较小';
+    }
+
+    const fullName = filename(d);
+    const cut = fullName.lastIndexOf('_') + 1;
+    const nameEl = $('filename');
+    nameEl.textContent = '';
+    nameEl.append(fullName.slice(0, cut), document.createElement('br'), fullName.slice(cut));
+    nameEl.title = fullName;
+
+    $('path-text').hidden = !state.inPlace;
+    $('out-path').hidden = state.inPlace;
+    $('in-place').checked = state.inPlace;
+    if ($('out-path').value !== state.outDir) $('out-path').value = state.outDir;
+
+    $('doc-title').textContent = d.name;
+    $('doc-title').title = d.name;
+    $('status-crop').textContent = ratio().key + ' · ' + px.w + ' × ' + px.h + ' px';
+
+    const applied = isApplied(d);
+    $('apply-toggle').disabled = false;
+    $('apply-toggle').setAttribute('aria-checked', String(applied));
+    $('save-count').textContent = String(appliedDocs().length);
+    $('save-all').disabled = importing || !appliedDocs().length;
+    $('count').textContent = String(active.length);
+    $('side-foot').textContent = importing ? '正在读取图片…' : active.length + ' 张 · ' + mb(totalBytes()) + ' MB';
+  }
+
+  let toastTimer = null;
+  function showToast(text, type) {
+    $('toast-text').textContent = text;
+    const isInfo = type === 'info';
+    $('toast-check').hidden = isInfo;
+    $('toast-info').hidden = !isInfo;
+    const el = $('toast');
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+  }
+
+  let drag = null;
+
+  function startMove(e) {
+    if (e.button !== 0) return;
+    if (e.target.closest('.handle')) return;
+    const d = doc();
+    if (!d) return;
+    const rect = photo.getBoundingClientRect();
+    if (!rect.width) return;
+    drag = { mode: 'move', startX: e.clientX, startY: e.clientY, crop: { ...ensureCrop(d) }, rect };
+    cropEl.focus({ preventScroll: true });
+    document.body.classList.add('is-dragging');
+    e.preventDefault();
+    window.addEventListener('pointermove', onDrag);
+    window.addEventListener('pointerup', endDrag, { once: true });
+  }
+
+  function startResize(e, handle) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const d = doc();
+    if (!d) return;
+    const rect = photo.getBoundingClientRect();
+    if (!rect.width) return;
+    drag = {
+      mode: 'resize',
+      corner: handle.dataset.corner,
+      crop: { ...ensureCrop(d) },
+      rect,
+    };
+    handle.focus({ preventScroll: true });
+    document.body.classList.add('is-dragging');
+    window.addEventListener('pointermove', onDrag);
+    window.addEventListener('pointerup', endDrag, { once: true });
+  }
+
+  function onDrag(e) {
+    if (!drag) return;
+    const d = doc();
+    if (!d) return;
+    const rect = drag.rect;
+    const r = ratio().w / ratio().h;
+    let c;
+
+    if (drag.mode === 'move') {
+      const dx = (e.clientX - drag.startX) / rect.width;
+      const dy = (e.clientY - drag.startY) / rect.height;
+      if (Math.abs(dx) < 0.0001 && Math.abs(dy) < 0.0001) return;
+      c = { ...drag.crop };
+      c.x = clamp(drag.crop.x + dx, 0, 1 - c.w);
+      c.y = clamp(drag.crop.y + dy, 0, 1 - c.h);
+    } else {
+      const s = drag.crop;
+      const corner = drag.corner;
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const west = corner.includes('w');
+      const north = corner.includes('n');
+      const ax = (west ? s.x + s.w : s.x) * rect.width;
+      const ay = (north ? s.y + s.h : s.y) * rect.height;
+      const maxW = west ? ax : rect.width - ax;
+      const maxH = north ? ay : rect.height - ay;
+      let w = Math.max(Math.abs(px - ax), Math.abs(py - ay) * r);
+      const limit = Math.min(maxW, maxH * r);
+      const minW = Math.min(40, limit);
+      w = clamp(w, minW, limit);
+      const h = w / r;
+      c = {
+        x: (west ? ax - w : ax) / rect.width,
+        y: (north ? ay - h : ay) / rect.height,
+        w: w / rect.width,
+        h: h / rect.height,
+        custom: true,
+      };
+      c.x = clamp(c.x, 0, 1 - c.w);
+      c.y = clamp(c.y, 0, 1 - c.h);
+    }
+
+    if (!c.custom) c.custom = isCustom(d, c);
+    state.crops.set(d.id, c);
+    updateCropVars();
+    updateInspector();
+    updateFileList();
+  }
+
+  function endDrag() {
+    drag = null;
+    document.body.classList.remove('is-dragging');
+    window.removeEventListener('pointermove', onDrag);
+  }
+
+  let saveOpen = false;
+  let saveTimer = null;
+  let doneTimer = null;
+  let saveProgress = 0;
+
+  let confirmOpen = false;
+  let confirmAction = null;
+  let confirmReturnFocus = null;
+  let confirmTimer = null;
+
+  function openConfirm(opts) {
+    if (confirmOpen) return;
+    confirmOpen = true;
+    confirmAction = opts.onConfirm || null;
+    confirmReturnFocus = opts.returnFocus || document.activeElement;
+    $('confirm-title').textContent = opts.title;
+    $('confirm-msg').textContent = opts.message;
+    $('confirm-ok').textContent = opts.confirmLabel || '确认';
+    clearTimeout(confirmTimer);
+    $('confirm-scrim').hidden = false;
+    $('confirm').hidden = false;
+    requestAnimationFrame(() => {
+      $('confirm-scrim').classList.add('open');
+      $('confirm').classList.add('open');
+    });
+    $('confirm-cancel').focus({ preventScroll: true });
+  }
+
+  function closeConfirm() {
+    if (!confirmOpen) return;
+    confirmOpen = false;
+    $('confirm-scrim').classList.remove('open');
+    $('confirm').classList.remove('open');
+    clearTimeout(confirmTimer);
+    confirmTimer = setTimeout(() => {
+      $('confirm-scrim').hidden = true;
+      $('confirm').hidden = true;
+    }, 180);
+    const f = confirmReturnFocus;
+    confirmReturnFocus = null;
+    if (f && f.isConnected) f.focus({ preventScroll: true });
+  }
+
+  function buildSaveList(docs) {
+    const list = $('save-list');
+    list.innerHTML = '';
+    docs.slice(0, 3).forEach((d) => {
+      const row = document.createElement('div');
+      row.className = 'save-item';
+      row.dataset.state = 'pending';
+      row.innerHTML =
+        '<span class="mark"><ryugi-icon name="check" size="9"></ryugi-icon></span>' +
+        '<span class="sname"></span>';
+      row.querySelector('.sname').textContent = filename(d);
+      list.appendChild(row);
+    });
+    if (docs.length > 3) {
+      const more = document.createElement('div');
+      more.className = 'save-more';
+      more.textContent = '+' + (docs.length - 3) + ' 个文件';
+      list.appendChild(more);
+    }
+  }
+
+  function buildSummaryList() {
+    const list = $('summary-list');
+    list.innerHTML = '';
+    active.forEach((d) => {
+      const applied = isApplied(d);
+      const c = state.crops.get(d.id);
+      const custom = Boolean(applied && c && isCustom(d, c));
+      const row = document.createElement('div');
+      row.className = 'sum-item';
+      if (!applied) row.classList.add('skip');
+      row.innerHTML = '<span class="sname"></span><span class="stag"></span>';
+      row.querySelector('.sname').textContent = filename(d);
+      const tag = row.querySelector('.stag');
+      tag.textContent = !applied ? '不参与' : custom ? '手动' : '默认';
+      if (custom) tag.classList.add('custom');
+      if (!applied) tag.classList.add('skip');
+      list.appendChild(row);
+    });
+  }
+
+  function qualitySummary(docs) {
+    const png = docs.filter((d) => d.fmt === 'PNG').length;
+    const jpg = docs.length - png;
+    const parts = [];
+    if (jpg) parts.push('JPEG ' + (state.quality === 'high' ? '高质量' : '标准压缩'));
+    if (png) parts.push('PNG ' + (state.quality === 'high' ? '无损保存' : '标准压缩'));
+    return parts.join(' · ') || '按原格式';
+  }
+
+  function destination() {
+    return state.inPlace ? PICTURES : (state.outDir || '未指定目录');
+  }
+
+  function openSheet() {
+    if (importing) return;
+    if (saveOpen) return;
+    if (!active.length) return;
+    const docs = appliedDocs();
+    if (!docs.length) return;
+    const skipped = active.length - docs.length;
+    saveOpen = true;
+    saveProgress = 0;
+    clearInterval(saveTimer);
+    clearTimeout(doneTimer);
+    saveTimer = null;
+    doneTimer = null;
+    $('sheet-title').textContent = '保存 ' + docs.length + ' 张图片';
+    $('sheet-sub').textContent = skipped
+      ? docs.length + ' 张参与 · ' + skipped + ' 张不参与'
+      : '按各图裁切设置保存 · 源文件不改';
+    $('summary-count').textContent = docs.length + ' 张图片' + (skipped ? ' · ' + skipped + ' 张不参与' : '');
+    const ratioKeys = [...new Set(docs.map((d) => ratio(d).key))];
+    $('summary-ratio').textContent = (ratioKeys.length === 1 ? ratioKeys[0] : '各图比例') + ' · 原始像素';
+    $('summary-quality').textContent = qualitySummary(docs);
+    $('summary-format').textContent = [...new Set(docs.map((d) => d.fmt))].join(' · ') + '（跟随原图）';
+    $('summary-crops').textContent = customCount(docs) + ' 张手动 · ' + (docs.length - customCount(docs)) + ' 张默认' + (skipped ? ' · ' + skipped + ' 张不参与' : '');
+    $('summary-dest').textContent = destination();
+    $('sheet-start').textContent = '保存 ' + docs.length + ' 张';
+    $('sheet-count').textContent = '0 / ' + docs.length;
+    $('sheet-pct').textContent = '0%';
+    $('sheet-bar').style.transform = 'scaleX(0)';
+    $('done-title').textContent = '已保存 ' + docs.length + ' 个文件' + (skipped ? '，' + skipped + ' 张不参与' : '');
+    $('done-path').textContent = destination();
+    buildSummaryList();
+    buildSaveList(docs);
+    $('sheet-summary-view').hidden = false;
+    $('sheet-progress-view').hidden = true;
+    $('sheet-done-view').hidden = true;
+    $('sheet-summary-foot').hidden = false;
+    $('sheet-progress-foot').hidden = true;
+    $('sheet-done-foot').hidden = true;
+    $('scrim').hidden = false;
+    $('sheet').hidden = false;
+    requestAnimationFrame(() => {
+      $('scrim').classList.add('open');
+      $('sheet').classList.add('open');
+    });
+    $('sheet-start').focus({ preventScroll: true });
+  }
+
+  function startSave() {
+    if (!saveOpen) return;
+    const docs = appliedDocs();
+    saveProgress = 0;
+    $('sheet-title').textContent = '正在保存 ' + docs.length + ' 个文件';
+    $('sheet-sub').textContent = '保存到 ' + destination();
+    $('sheet-count').textContent = '0 / ' + docs.length;
+    $('sheet-pct').textContent = '0%';
+    $('sheet-bar').style.transform = 'scaleX(0)';
+    $('sheet-summary-view').hidden = true;
+    $('sheet-summary-foot').hidden = true;
+    $('sheet-progress-view').hidden = false;
+    $('sheet-progress-foot').hidden = false;
+    buildSaveList(docs);
+    $('sheet-cancel').focus({ preventScroll: true });
+    clearInterval(saveTimer);
+    saveTimer = setInterval(tickSave, 180);
+  }
+
+  function tickSave() {
+    const count = appliedDocs().length;
+    saveProgress += 1;
+    const p = count ? saveProgress / count : 1;
+    $('sheet-count').textContent = saveProgress + ' / ' + count;
+    $('sheet-pct').textContent = Math.round(p * 100) + '%';
+    $('sheet-bar').style.transform = 'scaleX(' + p + ')';
+    document.querySelectorAll('.save-item').forEach((row, i) => {
+      row.dataset.state = saveProgress > i ? 'done' : saveProgress === i ? 'active' : 'pending';
+    });
+    if (saveProgress >= count) {
+      clearInterval(saveTimer);
+      saveTimer = null;
+      doneTimer = setTimeout(showDone, 320);
+    }
+  }
+
+  function showDone() {
+    $('sheet-title').textContent = '保存完成';
+    $('sheet-sub').textContent = '源文件未修改';
+    $('sheet-progress-view').hidden = true;
+    $('sheet-done-view').hidden = false;
+    $('sheet-progress-foot').hidden = true;
+    $('sheet-done-foot').hidden = false;
+    $('sheet-finish').focus({ preventScroll: true });
+  }
+
+  function finishAndClear() {
+    if (!active.length) {
+      closeSheet($('add-btn'));
+      return;
+    }
+    clearDocs();
+    closeSheet($('add-btn'));
+  }
+
+  function closeSheet(focusEl) {
+    if (!saveOpen) return;
+    saveOpen = false;
+    clearInterval(saveTimer);
+    clearTimeout(doneTimer);
+    saveTimer = null;
+    doneTimer = null;
+    $('scrim').classList.remove('open');
+    $('sheet').classList.remove('open');
+    setTimeout(() => {
+      if (saveOpen) return;
+      $('scrim').hidden = true;
+      $('sheet').hidden = true;
+    }, 200);
+    const target = focusEl && typeof focusEl.focus === 'function' ? focusEl : $('save-all');
+    target.focus({ preventScroll: true });
+  }
+
+  function init() {
+    ['image-input', 'folder-input'].forEach((id) => {
+      const input = $(id);
+      input.addEventListener('change', () => {
+        const files = Array.from(input.files);
+        input.value = '';
+        if (files.length) importFiles(files);
+      });
+    });
+    buildFileList();
+    buildRatioGrid();
+
+    state.inPlace = $('in-place').checked;
+    state.outDir = $('out-path').value;
+    ensureCrop(doc());
+    updateAll();
+
+    requestAnimationFrame(() => {
+      layoutPhoto();
+    });
+
+    new ResizeObserver(() => layoutPhoto()).observe(stage);
+    img.addEventListener('load', () => layoutPhoto());
+
+    cropEl.addEventListener('pointerdown', startMove);
+    document.querySelectorAll('.handle').forEach((h) => {
+      h.addEventListener('pointerdown', (e) => startResize(e, h));
+    });
+    cropEl.addEventListener('keydown', (e) => {
+      const map = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      const delta = map[e.key];
+      if (!delta) return;
+      e.preventDefault();
+      const d = doc();
+      if (!d) return;
+      const c = { ...ensureCrop(d) };
+      const step = e.shiftKey ? 0.01 : 0.002;
+      c.x = clamp(c.x + delta[0] * step, 0, 1 - c.w);
+      c.y = clamp(c.y + delta[1] * step, 0, 1 - c.h);
+      state.crops.set(d.id, c);
+      updateCropVars();
+      updateInspector();
+      updateFileList();
+    });
+
+    $('save-all').addEventListener('click', openSheet);
+    $('copy-name').addEventListener('click', async () => {
+      const d = doc();
+      if (!d) return;
+      try {
+        await navigator.clipboard.writeText(filename(d));
+        showToast('文件名已复制');
+      } catch {
+        showToast('复制失败，请手动选择文件名', 'info');
+      }
+    });
+
+    $('empty-open').addEventListener('click', addOne);
+    $('empty-folder').addEventListener('click', addAll);
+
+    $('add-btn').addEventListener('click', () => toggleAddMenu($('add-menu').hidden));
+    $('add-image').addEventListener('click', () => {
+      toggleAddMenu(false);
+      addOne();
+    });
+    $('add-folder').addEventListener('click', () => {
+      toggleAddMenu(false);
+      addAll();
+    });
+    $('add-clear').addEventListener('click', () => {
+      toggleAddMenu(false);
+      askClear();
+    });
+    document.addEventListener('click', (e) => {
+      if ($('add-menu').hidden) return;
+      if (e.target.closest('#add-menu') || e.target.closest('#add-btn')) return;
+      toggleAddMenu(false);
+    });
+
+    $('quality-high').addEventListener('click', () => {
+      const d = doc();
+      if (!d) return;
+      state.quality = 'high';
+      updateInspector();
+    });
+    $('quality-compressed').addEventListener('click', () => {
+      const d = doc();
+      if (!d) return;
+      state.quality = 'compressed';
+      updateInspector();
+    });
+    $('in-place').addEventListener('change', (e) => {
+      state.inPlace = e.target.checked;
+      updateInspector();
+    });
+    $('out-path').addEventListener('input', (e) => {
+      state.outDir = e.target.value;
+    });
+
+    $('summary-cancel').addEventListener('click', closeSheet);
+    $('sheet-start').addEventListener('click', startSave);
+    $('apply-toggle').addEventListener('click', toggleApplied);
+    $('sheet-cancel').addEventListener('click', closeSheet);
+    $('sheet-close').addEventListener('click', closeSheet);
+    $('sheet-finish').addEventListener('click', closeSheet);
+    $('sheet-finish-clear').addEventListener('click', finishAndClear);
+    $('sheet-reveal').addEventListener('click', () => showToast('原型演示：未写入磁盘', 'info'));
+
+    $('confirm-cancel').addEventListener('click', closeConfirm);
+    $('confirm-scrim').addEventListener('click', closeConfirm);
+    $('confirm-ok').addEventListener('click', () => {
+      const action = confirmAction;
+      closeConfirm();
+      if (action) action();
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (confirmOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeConfirm();
+        }
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (!saveOpen) openSheet();
+      } else if (e.key === 'Escape' && saveOpen) {
+        e.preventDefault();
+        closeSheet();
+      } else if (e.key === 'Escape' && !$('add-menu').hidden) {
+        e.preventDefault();
+        toggleAddMenu(false);
+        $('add-btn').focus({ preventScroll: true });
+      }
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>
