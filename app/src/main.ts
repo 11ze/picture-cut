@@ -87,49 +87,73 @@ async function refreshNames(): Promise<void> {
   docs.forEach((d, i) => state.names.set(d.id, names[i] ?? d.name));
 }
 
+type FileDoc = (typeof state.docs)[number];
+
+function fileA11yLabel(d: FileDoc, selected: boolean): string {
+  const bits = [d.name, `${d.width} × ${d.height}`, `${mb(d.bytes)} MB`];
+  if (!isApplied(d)) bits.push("不参与保存");
+  if (selected) bits.push("当前选中");
+  return bits.join("，");
+}
+
 function buildFileList(): void {
   fileList.innerHTML = "";
   state.docs.forEach((d) => {
+    const row = document.createElement("div");
+    row.className = "file-row";
+    row.setAttribute("role", "listitem");
+    row.dataset.id = d.id;
+
     const b = document.createElement("div");
     b.className = "file";
     b.setAttribute("role", "button");
     b.tabIndex = 0;
-    b.setAttribute("aria-pressed", String(d.id === state.selectedId));
+    const selected = d.id === state.selectedId;
+    b.setAttribute("aria-current", String(selected));
+    b.setAttribute("aria-label", fileA11yLabel(d, selected));
     b.dataset.id = d.id;
     b.title = d.name;
     if (!isApplied(d)) b.classList.add("off");
     b.innerHTML =
       '<img alt="" loading="lazy" />' +
-      '<span class="fmeta-wrap"><span class="fname"></span><span class="fmeta"></span></span>' +
-      '<button class="remove" type="button" title="从列表移除，不删除源文件"><span class="glyph glyph-x" aria-hidden="true">×</span></button>' +
+      '<span class="fmeta-wrap"><span class="fname"></span><span class="fmeta"><span class="fbase"></span><span class="fskip" hidden> · 不保存</span></span></span>' +
       '<span class="fdot" hidden></span>';
     const im = b.querySelector("img")!;
     im.src = d.thumb;
-    im.alt = d.name;
     b.querySelector(".fname")!.textContent = d.name;
-    b.querySelector(".fmeta")!.textContent = `${d.width} × ${d.height} · ${mb(d.bytes)} MB`;
-    const rm = b.querySelector<HTMLButtonElement>(".remove")!;
-    rm.setAttribute("aria-label", `从列表移除 ${d.name}，不删除源文件`);
-    b.addEventListener("click", (e) => {
-      if ((e.target as Element).closest(".remove")) return;
+    b.querySelector(".fbase")!.textContent = `${d.width} × ${d.height} · ${mb(d.bytes)} MB`;
+    b.addEventListener("click", () => {
       selectDoc(d.id);
     });
     b.addEventListener("keydown", (e) => {
-      if ((e.target as Element).closest(".remove")) return;
-      if (e.key === "Enter" || e.key === " ") {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        moveSelection(e.key === "ArrowDown" ? 1 : -1);
+      } else if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         selectDoc(d.id);
       }
     });
+
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "remove";
+    rm.title = "从列表移除，不删除源文件";
+    rm.setAttribute("aria-label", `从列表移除 ${d.name}，不删除源文件`);
+    rm.innerHTML = '<span class="glyph glyph-x" aria-hidden="true">×</span>';
     rm.addEventListener("click", (e) => {
       e.stopPropagation();
-      askRemove(d.id, rm);
+      removeDoc(d.id);
     });
-    fileList.appendChild(b);
+
+    row.appendChild(b);
+    row.appendChild(rm);
+    fileList.appendChild(row);
   });
   if (!state.docs.length) {
     const hint = document.createElement("div");
     hint.className = "list-empty";
+    hint.setAttribute("role", "presentation");
     hint.innerHTML = "暂无图片<br><span>点 + 或拖入文件</span>";
     fileList.appendChild(hint);
   }
@@ -145,10 +169,31 @@ function buildRatioGrid(): void {
     b.setAttribute("aria-checked", String(r.key === ratio().key));
     b.setAttribute("aria-label", `${r.key}，${r.use}`);
     b.dataset.key = r.key;
+    b.tabIndex = r.key === ratio().key ? 0 : -1;
     b.innerHTML =
       `<span class="glyph"><i style="width:${r.gw}px;height:${r.gh}px"></i></span>` +
       `<span class="lbl">${r.key}</span>`;
     b.addEventListener("click", () => setRatio(r.key));
+    b.addEventListener("keydown", (e) => {
+      const i = RATIOS.findIndex((x) => x.key === r.key);
+      let next = -1;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (i + 1) % RATIOS.length;
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        next = (i - 1 + RATIOS.length) % RATIOS.length;
+      } else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = RATIOS.length - 1;
+      if (next < 0) return;
+      e.preventDefault();
+      const key = RATIOS[next]!.key;
+      const focus = () => {
+        ratioGrid.querySelector<HTMLButtonElement>(`.ratio[data-key="${key}"]`)?.focus();
+      };
+      if (key === ratio().key) {
+        focus();
+        return;
+      }
+      void applyRatio(key).then(focus);
+    });
     ratioGrid.appendChild(b);
   });
 }
@@ -159,6 +204,15 @@ function selectDoc(id: string): void {
   state.selectedId = id;
   ensureCrop(d);
   updateAll();
+}
+
+function moveSelection(delta: number): void {
+  if (!state.docs.length) return;
+  const i = state.docs.findIndex((d) => d.id === state.selectedId);
+  const next = state.docs[clamp(i + delta, 0, state.docs.length - 1)]!;
+  selectDoc(next.id);
+  const row = fileList.querySelector<HTMLElement>(`.file[data-id="${next.id}"]`);
+  row?.focus({ preventScroll: true });
 }
 
 function setRatio(key: string): void {
@@ -209,6 +263,19 @@ function updateAll(): void {
   updateImage();
   updateCropVars();
   updateInspector();
+  scheduleInspectorOverflow();
+}
+
+const inspScroll = document.querySelector<HTMLElement>(".insp-scroll")!;
+let inspRaf = 0;
+function syncInspectorOverflow(): void {
+  const more =
+    inspScroll.scrollHeight - inspScroll.clientHeight - inspScroll.scrollTop > 4;
+  document.querySelector(".inspector")!.classList.toggle("has-more", more);
+}
+function scheduleInspectorOverflow(): void {
+  cancelAnimationFrame(inspRaf);
+  inspRaf = requestAnimationFrame(syncInspectorOverflow);
 }
 
 function updateEmptyState(): void {
@@ -222,6 +289,7 @@ function updateEmptyState(): void {
   $("out-sub").textContent = "添加图片后显示";
   $("output-format").textContent = "格式跟随原图";
   $("quality-high").textContent = "高质量";
+  $("quality-compressed").textContent = "标准压缩";
   $("quality-note").textContent = "";
   const qh = $<HTMLButtonElement>("quality-high");
   const qc = $<HTMLButtonElement>("quality-compressed");
@@ -241,14 +309,18 @@ function updateEmptyState(): void {
   $("count").textContent = "0";
   $("side-foot").textContent = "0 张";
   $("status-crop").textContent = "未选择图片";
+  $("stage-note").hidden = true;
+  scheduleInspectorOverflow();
 }
 
 function updateFileList(): void {
   fileList.querySelectorAll<HTMLElement>(".file").forEach((b) => {
     const d = state.docs.find((x) => x.id === b.dataset.id);
     if (!d) return;
-    b.setAttribute("aria-pressed", String(d.id === state.selectedId));
+    b.setAttribute("aria-current", String(d.id === state.selectedId));
+    b.setAttribute("aria-label", fileA11yLabel(d, d.id === state.selectedId));
     b.classList.toggle("off", !isApplied(d));
+    b.querySelector<HTMLElement>(".fskip")!.hidden = isApplied(d);
     const dot = b.querySelector<HTMLElement>(".fdot")!;
     dot.hidden = !customCrop(d);
   });
@@ -256,8 +328,10 @@ function updateFileList(): void {
 
 function updateRatioGrid(): void {
   ratioGrid.querySelectorAll<HTMLButtonElement>(".ratio").forEach((b) => {
+    const checked = Boolean(doc()) && b.dataset.key === ratio().key;
     b.disabled = !doc();
-    b.setAttribute("aria-checked", String(Boolean(doc()) && b.dataset.key === ratio().key));
+    b.setAttribute("aria-checked", String(checked));
+    b.tabIndex = checked ? 0 : -1;
   });
   $("ratio-hint").textContent = doc() ? `${ratio().key} · ${ratio().use}` : "添加图片后选择比例";
 }
@@ -323,17 +397,20 @@ function updateInspector(): void {
   qc.disabled = false;
   qh.textContent = isPng ? "无损保存" : "高质量";
   qh.title = isPng ? "保留全部颜色和透明背景，不做有损压缩" : "保留更多细节，文件较大，仍会有损压缩";
-  qc.title = isPng ? "文件较小，保留透明背景，可能影响渐变和细节" : "文件较小，可能出现压缩痕迹";
+  qc.textContent = isPng ? "256 色" : "标准压缩";
+  qc.title = isPng ? "降到 256 色，保留透明背景；渐变和细节会受影响" : "文件较小，可能出现压缩痕迹";
   qh.setAttribute("aria-checked", String(state.quality === "high"));
   qc.setAttribute("aria-checked", String(state.quality === "compressed"));
   $("quality-seg").classList.remove("disabled");
 
   if (isPng && state.quality === "high") {
-    $("quality-note").textContent = "保留全部颜色 · 保留透明背景";
+    $("quality-note").textContent = "无损 · 保留透明背景";
+  } else if (isPng) {
+    $("quality-note").textContent = "256 色 · 保留透明背景";
   } else if (state.quality === "high") {
-    $("quality-note").textContent = "保留更多细节";
+    $("quality-note").textContent = "JPEG q95 · 保留更多细节";
   } else {
-    $("quality-note").textContent = "文件较小";
+    $("quality-note").textContent = "JPEG q80 · 文件较小";
   }
 
   const fullName = filename(d);
@@ -352,25 +429,48 @@ function updateInspector(): void {
   const applied = isApplied(d);
   $<HTMLButtonElement>("apply-toggle").disabled = false;
   $("apply-toggle").setAttribute("aria-checked", String(applied));
+  $("stage-note").hidden = applied;
   $("save-count").textContent = String(appliedDocs().length);
   $<HTMLButtonElement>("save-all").disabled = state.importing || !appliedDocs().length;
   $("count").textContent = String(state.docs.length);
   $("side-foot").textContent = state.importing
     ? "正在读取图片…"
     : `${state.docs.length} 张 · ${mb(totalBytes())} MB`;
+  scheduleInspectorOverflow();
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
+type ToastAction = { label: string; onClick: () => void };
+let toastAction: ToastAction | null = null;
 
-function showToast(text: string, type: Toast = "ok"): void {
+function showToast(text: string, type: Toast = "ok", action?: ToastAction): void {
   $("toast-text").textContent = text;
   const isInfo = type === "info";
   $("toast-check").hidden = isInfo;
   $("toast-info").hidden = !isInfo;
+  const btn = $<HTMLButtonElement>("toast-action");
+  toastAction = action ?? null;
+  btn.hidden = !toastAction;
+  btn.textContent = toastAction?.label ?? "撤销";
+  btn.onclick = toastAction
+    ? () => {
+        const fn = toastAction;
+        toastAction = null;
+        btn.hidden = true;
+        $("toast").classList.remove("show");
+        clearTimeout(toastTimer);
+        fn?.onClick();
+      }
+    : null;
   const el = $("toast");
   el.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
+  const wait = toastAction ? 5200 : 2400;
+  toastTimer = setTimeout(() => {
+    el.classList.remove("show");
+    btn.hidden = true;
+    toastAction = null;
+  }, wait);
 }
 
 type DragState =
@@ -462,7 +562,7 @@ function qualitySummary(docs = state.docs): string {
   const jpg = docs.length - png;
   const parts: string[] = [];
   if (jpg) parts.push(`JPEG ${state.quality === "high" ? "高质量" : "标准压缩"}`);
-  if (png) parts.push(`PNG ${state.quality === "high" ? "无损保存" : "标准压缩"}`);
+  if (png) parts.push(`PNG ${state.quality === "high" ? "无损保存" : "256 色"}`);
   return parts.join(" · ") || "按原格式";
 }
 
@@ -518,6 +618,7 @@ async function openSheet(): Promise<void> {
     $("sheet").classList.add("open");
   });
   $("sheet-start").focus({ preventScroll: true });
+  syncModalInert();
 }
 
 function buildSummaryList(): void {
@@ -633,7 +734,7 @@ async function startSave(): Promise<void> {
 function showDone(result: Report): void {
   const failed = result.failed.length;
   const skipped = state.docs.length - appliedDocs().length;
-  $("sheet-title").textContent = "保存完成";
+  $("sheet-title").textContent = failed ? "保存未全部完成" : "保存完成";
   $("sheet-sub").textContent = "源文件未修改";
   let title = `已保存 ${result.saved.length} 个文件`;
   if (skipped) title += `，${skipped} 张不参与`;
@@ -664,6 +765,7 @@ function closeSheet(focusEl?: HTMLElement): void {
     $("scrim").hidden = true;
     $("sheet").hidden = true;
   }, 200);
+  syncModalInert();
   (focusEl ?? $("save-all")).focus({ preventScroll: true });
 }
 
@@ -671,10 +773,43 @@ let confirmOpen = false;
 let confirmAction: (() => void) | null = null;
 let confirmReturnFocus: HTMLElement | null = null;
 
+function syncModalInert(): void {
+  const on = saveOpen || confirmOpen;
+  document.querySelectorAll<HTMLElement>(".toolbar, .sidebar, .canvas, .inspector, .status, .toast-action").forEach((el) => {
+    el.inert = on;
+  });
+}
+
+function focusable(root: HTMLElement): HTMLElement[] {
+  return Array.from(
+    root.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((el) => el.getClientRects().length > 0);
+}
+
+function trapTab(e: KeyboardEvent, root: HTMLElement): void {
+  const list = focusable(root);
+  if (!list.length) return;
+  const first = list[0]!;
+  const last = list[list.length - 1]!;
+  if (!root.contains(document.activeElement)) {
+    e.preventDefault();
+    first.focus({ preventScroll: true });
+  } else if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus({ preventScroll: true });
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus({ preventScroll: true });
+  }
+}
+
 function openConfirm(opts: {
   title: string;
   message: string;
   confirmLabel: string;
+  danger?: boolean;
   returnFocus?: HTMLElement;
   onConfirm: () => void;
 }): void {
@@ -685,6 +820,7 @@ function openConfirm(opts: {
   $("confirm-title").textContent = opts.title;
   $("confirm-msg").textContent = opts.message;
   $("confirm-ok").textContent = opts.confirmLabel;
+  $("confirm-ok").className = `btn ${opts.danger === false ? "primary" : "danger"}`;
   $("confirm-scrim").hidden = false;
   $("confirm").hidden = false;
   requestAnimationFrame(() => {
@@ -692,6 +828,7 @@ function openConfirm(opts: {
     $("confirm").classList.add("open");
   });
   $("confirm-cancel").focus({ preventScroll: true });
+  syncModalInert();
 }
 
 function closeConfirm(): void {
@@ -704,28 +841,35 @@ function closeConfirm(): void {
     $("confirm-scrim").hidden = true;
     $("confirm").hidden = true;
   }, 180);
+  syncModalInert();
   const f = confirmReturnFocus;
   confirmReturnFocus = null;
   if (f?.isConnected) f.focus({ preventScroll: true });
 }
 
-function askRemove(id: string, trigger: HTMLElement): void {
-  const d = state.docs.find((x) => x.id === id);
-  if (!d) return;
-  openConfirm({
-    title: "移除这张图片？",
-    message: `「${d.name}」会从本次列表移除。源文件不会被删除。`,
-    confirmLabel: "移除",
-    returnFocus: trigger,
-    onConfirm: () => removeDoc(id),
-  });
-}
+let lastRemoved: {
+  doc: NonNullable<ReturnType<typeof doc>>;
+  index: number;
+  ratio: string | undefined;
+  crop: Crop | undefined;
+  excluded: boolean;
+  wasSelected: boolean;
+} | null = null;
 
 function removeDoc(id: string): void {
   const i = state.docs.findIndex((d) => d.id === id);
   if (i < 0) return;
   const wasSelected = state.selectedId === id;
-  state.docs.splice(i, 1);
+  const [removed] = state.docs.splice(i, 1);
+  if (!removed) return;
+  lastRemoved = {
+    doc: removed,
+    index: i,
+    ratio: state.ratios.get(id),
+    crop: state.crops.get(id),
+    excluded: state.excluded.has(id),
+    wasSelected,
+  };
   state.ratios.delete(id);
   state.crops.delete(id);
   state.excluded.delete(id);
@@ -739,14 +883,35 @@ function removeDoc(id: string): void {
   buildFileList();
   updateAll();
   refreshNamesLater();
-  const sel = fileList.querySelector<HTMLElement>('.file[aria-pressed="true"]');
+  const sel = fileList.querySelector<HTMLElement>('.file[aria-current="true"]');
   (sel ?? $("add-btn")).focus({ preventScroll: true });
-  showToast("已从列表移除，源文件未删除");
+  showToast(`已移除 ${removed.name}`, "ok", { label: "撤销", onClick: undoRemove });
+}
+
+function undoRemove(): void {
+  if (!lastRemoved) return;
+  const s = lastRemoved;
+  lastRemoved = null;
+  state.docs.splice(Math.min(s.index, state.docs.length), 0, s.doc);
+  if (s.ratio) state.ratios.set(s.doc.id, s.ratio);
+  else state.ratios.delete(s.doc.id);
+  if (s.crop) state.crops.set(s.doc.id, s.crop);
+  else state.crops.delete(s.doc.id);
+  if (s.excluded) state.excluded.add(s.doc.id);
+  else state.excluded.delete(s.doc.id);
+  state.selectedId = s.doc.id;
+  buildFileList();
+  updateAll();
+  refreshNamesLater();
+  const row = fileList.querySelector<HTMLElement>(`.file[data-id="${s.doc.id}"]`);
+  if (!saveOpen && !confirmOpen) row?.focus({ preventScroll: true });
+  showToast(`已恢复 ${s.doc.name}`);
 }
 
 function clearDocs(): void {
   if (!state.docs.length) return;
   state.docs = [];
+  lastRemoved = null;
   state.ratios.clear();
   state.crops.clear();
   state.excluded.clear();
@@ -924,8 +1089,10 @@ function init(): void {
   updateAll();
 
   requestAnimationFrame(() => layoutPhoto());
-  new ResizeObserver(() => layoutPhoto()).observe(stage);
-  img.addEventListener("load", () => layoutPhoto());
+  new ResizeObserver(() => { layoutPhoto(); syncInspectorOverflow(); }).observe(stage);
+  img.addEventListener("load", () => { layoutPhoto(); syncInspectorOverflow(); });
+  inspScroll.addEventListener("scroll", syncInspectorOverflow, { passive: true });
+  window.addEventListener("resize", () => { layoutPhoto(); syncInspectorOverflow(); });
 
   cropEl.addEventListener("pointerdown", startMove);
   initDropTarget();
@@ -1032,6 +1199,24 @@ function init(): void {
   });
 
   window.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
+      e.preventDefault();
+      if (!saveOpen && !confirmOpen) void importWith(() => Library.pickImages());
+      return;
+    }
+    if ((e.key === "Delete" || e.key === "Backspace") && !saveOpen && !confirmOpen) {
+      const t = e.target;
+      if (t instanceof Element && t.closest('input, textarea, [contenteditable="true"]')) return;
+      const d = doc();
+      if (!d) return;
+      e.preventDefault();
+      removeDoc(d.id);
+      return;
+    }
+    if (e.key === "Tab" && (saveOpen || confirmOpen)) {
+      trapTab(e, confirmOpen ? $("confirm") : $("sheet"));
+      return;
+    }
     if (confirmOpen) {
       if (e.key === "Escape") {
         e.preventDefault();

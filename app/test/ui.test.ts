@@ -348,7 +348,7 @@ describe("import", () => {
     );
     expect(await page.locator("#count").textContent()).toBe("3");
     expect(await page.locator("#side-foot").textContent()).toContain("3 张");
-    expect(await page.locator(".file").nth(0).getAttribute("aria-pressed")).toBe("true");
+    expect(await page.locator(".file").nth(0).getAttribute("aria-current")).toBe("true");
   });
 
   test("reports the files it could not read", async () => {
@@ -470,7 +470,8 @@ describe("import", () => {
   test("refuses a drop while the confirm dialog is open", async () => {
     const page = await openApp([CITY]);
     await addImages(page);
-    await page.locator(".file .remove").first().click();
+    await page.locator("#add-btn").click();
+    await page.locator("#add-clear").click();
     await page.locator("#confirm:not([hidden])").waitFor();
     await page.evaluate(() => {
       (window as unknown as { __stub: { emit: (name: string, payload: unknown) => void } }).__stub.emit(
@@ -611,8 +612,7 @@ describe("per-image state", () => {
       "city_16x9_q80_20261117-103842-2.jpg",
     );
 
-    await page.locator('.file[data-id^="city#"] .remove').click();
-    await page.locator("#confirm-ok").click();
+    await page.locator('.file-row[data-id^="city#"] .remove').click();
     await page.locator('.file[data-id^="twin#"]').click();
     await settle(page);
     expect(await page.locator("#filename").textContent()).toBe(
@@ -695,6 +695,7 @@ describe("save", () => {
     await page.locator("#sheet-start").click();
     await page.waitForSelector("#sheet-done-view:not([hidden])", { timeout: 5000 });
 
+    expect(await page.locator("#sheet-title").textContent()).toBe("保存未全部完成");
     expect(await page.locator("#done-title").textContent()).toBe("已保存 2 个文件，1 个失败");
     expect(await page.locator("#sheet-count").textContent()).toBe("3 / 3");
     expect(await page.locator("#sheet-pct").textContent()).toBe("100%");
@@ -822,3 +823,163 @@ async function grade(
   await page.close();
   return data;
 }
+
+describe("batch and keyboard", () => {
+  test("Tab stays inside the save sheet and the background is inert", async () => {
+    const page = await openApp([CITY]);
+    await addImages(page);
+    await page.locator("#save-all").click();
+    await page.locator("#sheet:not([hidden])").waitFor();
+    for (let i = 0; i < 10; i++) await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => Boolean(document.activeElement?.closest("#sheet")))).toBe(true);
+    expect(
+      await page.evaluate(() => (document.querySelector(".toolbar") as HTMLElement).inert),
+    ).toBe(true);
+  });
+
+  test("Tab stays inside the confirm dialog", async () => {
+    const page = await openApp([CITY]);
+    await addImages(page);
+    await page.locator("#add-btn").click();
+    await page.locator("#add-clear").click();
+    await page.locator("#confirm:not([hidden])").waitFor();
+    for (let i = 0; i < 8; i++) await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => Boolean(document.activeElement?.closest("#confirm")))).toBe(true);
+    expect(
+      await page.evaluate(() => (document.querySelector(".toolbar") as HTMLElement).inert),
+    ).toBe(true);
+  });
+
+  test("the toast action is unavailable while a modal is open", async () => {
+    const page = await openApp([CITY, LAKE, COFFEE]);
+    await addImages(page);
+
+    await page.locator(".file-row").first().locator(".remove").click();
+    await page.locator("#save-all").click();
+    await page.locator("#sheet:not([hidden])").waitFor();
+    expect(
+      await page.evaluate(() => (document.querySelector("#toast-action") as HTMLElement).inert),
+    ).toBe(true);
+    expect(await page.locator("#toast-action").isVisible()).toBe(false);
+
+    await page.locator("#summary-cancel").click();
+    await page.locator("#sheet").waitFor({ state: "hidden" });
+    await page.locator(".file-row").first().locator(".remove").click();
+    await page.locator("#add-btn").click();
+    await page.locator("#add-clear").click();
+    await page.locator("#confirm:not([hidden])").waitFor();
+    expect(
+      await page.evaluate(() => (document.querySelector("#toast-action") as HTMLElement).inert),
+    ).toBe(true);
+    expect(await page.locator("#toast-action").isVisible()).toBe(false);
+  });
+
+  test("the ratio group has no apply-to-all control", async () => {
+    const page = await openApp([CITY, LAKE]);
+    await addImages(page);
+    expect(await page.locator("#ratio-all").count()).toBe(0);
+    expect(await page.getByRole("button", { name: "应用到全部" }).count()).toBe(0);
+  });
+
+  test("removing an image can be undone", async () => {
+    const page = await openApp([CITY, LAKE]);
+    await addImages(page);
+    await page.locator(".file-row").first().locator(".remove").click();
+    expect(await page.locator(".file").count()).toBe(1);
+    await page.locator("#toast-action").click();
+    expect(await page.locator(".file").count()).toBe(2);
+    expect(await page.locator(".file").first().getAttribute("aria-current")).toBe("true");
+  });
+});
+
+describe("copy", () => {
+  test("PNG standard quality names the 256-color preview", async () => {
+    const page = await openApp([COFFEE]);
+    await addImages(page);
+    expect(await page.locator("#quality-compressed").textContent()).toBe("256 色");
+    expect(await page.locator("#quality-note").textContent()).toBe("256 色 · 保留透明背景");
+    await page.locator("#save-all").click();
+    await page.locator("#sheet-summary-view:not([hidden])").waitFor();
+    expect(await page.locator("#summary-quality").textContent()).toBe("PNG 256 色");
+  });
+
+  test("the done sheet shows the saved result once", async () => {
+    const page = await openApp([CITY]);
+    await addImages(page);
+    await page.locator("#save-all").click();
+    await page.locator("#sheet-start").click();
+    await page.waitForSelector("#sheet-done-view:not([hidden])", { timeout: 5000 });
+    expect(await page.locator("#sheet-done-view .done-mark").count()).toBe(0);
+    const text = await page.locator("#sheet-done-view").innerText();
+    expect((text.match(/已保存/g) || []).length).toBe(1);
+  });
+});
+
+describe("accessibility", () => {
+  test("image rows are list items with separate remove buttons", async () => {
+    const page = await openApp([CITY, LAKE]);
+    await addImages(page);
+    const shape = await page.evaluate(() => {
+      const list = document.querySelector("#file-list")!;
+      const rows = [...list.querySelectorAll(":scope > .file-row")];
+      return {
+        role: list.getAttribute("role"),
+        rows: rows.length,
+        listitems: rows.every((row) => row.getAttribute("role") === "listitem"),
+        buttons: rows.every((row) =>
+          row.querySelector(':scope > .file[role="button"][aria-current]'),
+        ),
+        pressed: rows.some((row) => row.querySelector(':scope > .file[aria-pressed]')),
+        cleanAlts: rows.every(
+          (row) => row.querySelector(":scope > .file img")?.getAttribute("alt") === "",
+        ),
+        removes: rows.every((row) =>
+          row.querySelector(":scope > .remove")?.getAttribute("aria-label"),
+        ),
+        nested: rows.some((row) => row.querySelector(".file .remove")),
+      };
+    });
+    expect(shape).toEqual({
+      role: "list",
+      rows: 2,
+      listitems: true,
+      buttons: true,
+      pressed: false,
+      cleanAlts: true,
+      removes: true,
+      nested: false,
+    });
+    expect(await page.locator(".file").first().getAttribute("aria-current")).toBe("true");
+    expect(await page.locator(".file").first().getAttribute("aria-label")).toContain("当前选中");
+    await page.locator(".file").nth(1).click();
+    expect(await page.locator(".file").first().getAttribute("aria-current")).toBe("false");
+    expect(await page.locator(".file").first().getAttribute("aria-label")).not.toContain("当前选中");
+  });
+
+  test("the ratio group exposes one checked radio", async () => {
+    const page = await openApp([CITY]);
+    await addImages(page);
+    expect(await page.locator("#ratio-grid").getAttribute("role")).toBe("radiogroup");
+    expect(await page.locator("#ratio-grid .ratio").count()).toBe(9);
+    expect(
+      await page.locator('#ratio-grid .ratio[role="radio"][aria-checked="true"]').count(),
+    ).toBe(1);
+    await page.getByRole("radio", { name: "1:1，头像", exact: true }).click();
+    expect(await page.locator('#ratio-grid .ratio[aria-checked="true"] .lbl').textContent()).toBe(
+      "1:1",
+    );
+    const tabStops = await page
+      .locator("#ratio-grid .ratio")
+      .evaluateAll((els) => els.filter((el) => el.tabIndex === 0).length);
+    expect(tabStops).toBe(1);
+    await page.keyboard.press("ArrowRight");
+    await page.waitForFunction(
+      () =>
+        document.querySelector('#ratio-grid .ratio[aria-checked="true"] .lbl')?.textContent ===
+        "4:3",
+    );
+    expect(await page.evaluate(() => document.activeElement?.getAttribute("data-key"))).toBe(
+      "4:3",
+    );
+  });
+});

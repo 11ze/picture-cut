@@ -284,7 +284,7 @@
     line-height: 1.7;
     text-align: center;
   }
-  .list-empty span { color: var(--text-3); opacity: .7; font-size: 10px; }
+  .list-empty span { color: var(--text-3); font-size: 11px; }
   .count {
     min-width: 17px; height: 17px;
     padding: 0 5px;
@@ -305,6 +305,7 @@
     flex-direction: column;
     gap: 2px;
   }
+  .file-row { position: relative; }
   .file {
     position: relative;
     display: grid;
@@ -321,12 +322,12 @@
     transition: background-color .12s ease-out;
   }
   .file:hover { background: rgba(255,255,255,.035); }
-  .file[aria-pressed="true"] { background: var(--accent-soft); }
-  .file.off img { opacity: .38; }
-  .file.off .fname { color: var(--text-3); }
-  .file.off .fmeta { opacity: .6; }
+  .file[aria-current="true"] { background: var(--accent-soft); }
+  .file.off img { opacity: .45; }
+  .file.off .fname { color: var(--text-2); }
+  .file.off .fmeta { color: var(--text-3); }
   .file:focus-visible { outline: 2px solid rgba(232,163,61,.65); outline-offset: -2px; }
-  .file .remove {
+  .file-row .remove {
     position: absolute;
     right: 6px;
     top: 50%;
@@ -341,9 +342,10 @@
     opacity: .7;
     transition: opacity .12s ease-out, background-color .12s ease-out, color .12s ease-out;
   }
-  .file:hover .remove, .file:focus-within .remove { opacity: 1; }
-  .file .remove:hover { color: var(--text); background: rgba(255,255,255,.08); }
-  .file .remove:focus-visible { opacity: 1; outline: 2px solid rgba(232,163,61,.65); outline-offset: 0; }
+  .file-row:hover .remove, .file-row:focus-within .remove { opacity: 1; }
+  .file-row:hover .file:not([aria-current="true"]) { background: rgba(255,255,255,.035); }
+  .file-row .remove:hover { color: var(--text); background: rgba(255,255,255,.08); }
+  .file-row .remove:focus-visible { opacity: 1; outline: 2px solid rgba(232,163,61,.65); outline-offset: 0; }
   .file img {
     width: 40px; height: 40px;
     border-radius: 4px;
@@ -352,7 +354,7 @@
     outline: 1px solid rgba(255,255,255,.10);
     outline-offset: -1px;
   }
-  .file[aria-pressed="true"] img { outline-color: rgba(232,163,61,.8); }
+  .file[aria-current="true"] img { outline-color: rgba(232,163,61,.8); }
   .fmeta-wrap { min-width: 0; }
   .fname {
     display: block;
@@ -363,7 +365,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .file[aria-pressed="true"] .fname { color: var(--text); }
+  .file[aria-current="true"] .fname { color: var(--text); }
   .fmeta {
     display: block;
     margin-top: 2px;
@@ -371,7 +373,10 @@
     color: var(--text-3);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
+  .fskip { color: var(--accent); }
   .fdot {
     position: absolute;
     left: 44px;
@@ -405,6 +410,7 @@
     background: var(--canvas);
   }
   .stage {
+    position: relative;
     flex: 1;
     min-height: 0;
     display: flex;
@@ -478,19 +484,33 @@
   .handle.sw span { left: 14px; bottom: 14px; border-left-width: 2px; border-bottom-width: 2px; }
   .handle.se { right: -14px; bottom: -14px; cursor: nwse-resize; }
   .handle.se span { right: 14px; bottom: 14px; border-right-width: 2px; border-bottom-width: 2px; }
-  .handle:hover span { filter: drop-shadow(0 0 4px rgba(232,163,61,.7)); }
+  .handle span { filter: drop-shadow(0 0 1px rgba(0,0,0,.85)); }
+  .handle:hover span { filter: drop-shadow(0 0 1px rgba(0,0,0,.85)) drop-shadow(0 0 4px rgba(232,163,61,.7)); }
   .handle:focus-visible { outline: 2px solid rgba(232,163,61,.65); outline-offset: 0; }
 
+  .stage-note {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    z-index: 4;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(232,163,61,.12);
+    border: 1px solid rgba(232,163,61,.32);
+    color: var(--accent);
+    font-size: 10.5px;
+    letter-spacing: .02em;
+    pointer-events: none;
+  }
   .canvas-hint {
     position: absolute;
     left: 50%;
     bottom: 10px;
     transform: translateX(-50%);
     color: var(--text-3);
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: .02em;
     white-space: nowrap;
-    opacity: .75;
     pointer-events: none;
   }
   .empty {
@@ -516,11 +536,12 @@
   .empty-title { margin-top: 14px; font-size: 14px; font-weight: 600; color: var(--text); }
   .empty-sub { margin-top: 5px; color: var(--text-3); font-size: 11px; line-height: 1.6; }
   .empty-actions { margin-top: 16px; display: flex; align-items: center; gap: 8px; }
-  .empty-note { margin-top: 14px; color: var(--text-3); font-size: 10px; opacity: .8; }
+  .empty-note { margin-top: 14px; color: var(--text-3); font-size: 11px; }
 
   /* inspector */
   .inspector {
     grid-area: insp;
+    position: relative;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -533,7 +554,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 11px 16px 12px;
+    padding: 10px 16px;
     border-bottom: 1px solid var(--line);
   }
   .apply-title { color: var(--text); font-size: 11.5px; font-weight: 500; }
@@ -571,20 +592,46 @@
   }
   .icon-btn:hover { background: rgba(255,255,255,.06); color: var(--text); }
   .icon-btn:disabled { opacity: .35; pointer-events: none; }
-  .insp-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px; }
-  .sec { padding: 14px 0 16px; border-bottom: 1px solid var(--line); }
+  .insp-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 16px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.18) transparent;
+  }
+  .insp-scroll::-webkit-scrollbar { width: 8px; }
+  .insp-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 4px; }
+  .insp-fade {
+    position: absolute;
+    left: 0; right: 8px;
+    bottom: 38px;
+    height: 26px;
+    z-index: 2;
+    background: linear-gradient(to bottom, rgba(24,22,19,0), var(--insp));
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .15s ease-out;
+  }
+  .inspector.has-more .insp-fade { opacity: 1; }
+  .sec { padding: 10px 0; border-bottom: 1px solid var(--line); }
   .sec:last-child { border-bottom: 0; }
   .sec-label {
-    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    min-height: 14px;
     color: var(--text-3);
     font-size: 10px;
     font-weight: 600;
     letter-spacing: .08em;
   }
 
-  .ratio-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .ratio-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
   .ratio {
-    height: 58px;
+    height: 50px;
     border: 1px solid rgba(255,255,255,.07);
     border-radius: 7px;
     background: rgba(255,255,255,.025);
@@ -612,7 +659,21 @@
   }
   .ratio[aria-checked="true"] .glyph i { opacity: 1; border-color: rgba(29,21,8,.85); }
   .ratio[aria-checked="true"] .lbl { font-weight: 600; }
-  .ratio-hint { margin-top: 8px; color: var(--text-3); font-size: 10.5px; }
+  .ratio-hint { margin-top: 6px; color: var(--text-3); font-size: 10.5px; }
+  .link-btn {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--text-2);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .02em;
+    line-height: 14px;
+    transition: color .12s ease-out;
+  }
+  .link-btn:hover:not(:disabled) { color: var(--text); }
+  .link-btn:disabled { opacity: .45; }
+  .link-btn:focus-visible { outline: 2px solid rgba(232,163,61,.65); outline-offset: 2px; border-radius: 2px; }
 
   .out-size {
     display: flex;
@@ -629,7 +690,7 @@
   .out-sub { margin-top: 4px; color: var(--text-3); font-size: 10.5px; font-variant-numeric: tabular-nums; }
   .out-format { margin-bottom: 8px; color: var(--text-2); font-size: 11px; }
 
-  .sub-label { margin: 14px 0 6px; color: var(--text-3); font-size: 10.5px; }
+  .sub-label { margin: 12px 0 6px; color: var(--text-3); font-size: 10.5px; }
   .seg {
     display: flex;
     gap: 2px;
@@ -711,7 +772,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    margin: 14px 0 6px;
+    margin: 12px 0 6px;
     color: var(--text-3);
     font-size: 10.5px;
   }
@@ -719,8 +780,8 @@
     padding: 1px 5px;
     border: 1px solid rgba(255,255,255,.08);
     border-radius: var(--r-xs);
-    font-size: 9px;
-    color: var(--text-3);
+    font-size: 10px;
+    color: var(--text-2);
   }
   .fname-box {
     display: flex;
@@ -811,7 +872,20 @@
     transition: transform .18s cubic-bezier(.16,1,.3,1), opacity .18s ease-out;
   }
   .toast.show { transform: translate(-50%, 0); opacity: 1; }
+  .toast-action[inert] { visibility: hidden; }
   .toast ryugi-icon { color: var(--accent); flex: none; }
+  .toast-action {
+    margin-left: 2px;
+    padding: 0 2px;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font-size: 11.5px;
+    font-weight: 600;
+    pointer-events: auto;
+  }
+  .toast-action:hover { text-decoration: underline; }
+  .toast-action:focus-visible { outline: 2px solid rgba(232,163,61,.65); outline-offset: 2px; border-radius: 3px; }
 
   /* drop target */
   .drop {
@@ -949,6 +1023,18 @@
     border-top: 1px solid var(--line);
   }
   .sheet-foot .btn { min-width: 64px; justify-content: center; }
+  .sheet-foot.done-foot { justify-content: flex-start; }
+  .done-spacer { flex: 1; }
+  .done-foot .link-btn {
+    min-width: 0;
+    padding: 0 4px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .done-foot .link-btn:hover { color: var(--danger); background: transparent; }
   .sum-head {
     display: flex;
     align-items: baseline;
@@ -1012,24 +1098,16 @@
     padding: 1px 5px;
     border: 1px solid var(--line-2);
     border-radius: 3px;
-    color: var(--text-3);
-    font-size: 9px;
+    color: var(--text-2);
+    font-size: 10px;
     line-height: 1.4;
   }
   .stag.custom { border-color: rgba(232,163,61,.45); color: var(--accent); }
   .stag.skip { border-color: var(--line-2); color: var(--text-3); }
-  .sum-item.skip { opacity: .55; }
+  .sum-item.skip { opacity: 1; }
   .sum-item.skip .sname { color: var(--text-3); }
   .summary-more { padding: 3px 0 0; color: var(--text-3); font-size: 10px; }
   .done-view { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 18px 22px; }
-  .done-mark {
-    width: 36px; height: 36px;
-    border-radius: 50%;
-    display: grid; place-items: center;
-    background: var(--accent-soft);
-    color: var(--accent);
-    margin-bottom: 12px;
-  }
   .done-view h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text); }
   .done-view p { margin: 6px 0 0; font: 10.5px/1.5 var(--mono); color: var(--text-3); word-break: break-all; }
 
@@ -1132,6 +1210,7 @@
 
       <main class="canvas" id="canvas">
         <div class="stage" id="stage">
+          <div class="stage-note" id="stage-note" hidden>不参与本次保存</div>
           <div class="empty" id="empty" hidden>
             <span class="empty-mark" aria-hidden="true"><span class="glyph glyph-plus lg">+</span></span>
             <div class="empty-title">把图片加入本次列表</div>
@@ -1172,7 +1251,7 @@
         </div>
         <div class="insp-scroll">
           <section class="sec">
-            <div class="sec-label">比例 · 当前图片</div>
+            <div class="sec-label"><span>比例 · 当前图片</span></div>
             <div class="ratio-grid" id="ratio-grid" role="radiogroup" aria-label="裁切比例"></div>
             <div class="ratio-hint" id="ratio-hint">16:9 · 桌面壁纸</div>
           </section>
@@ -1183,7 +1262,7 @@
             <div class="out-size"><span id="crop-size">2400 × 1350</span><em id="crop-unit">px</em></div>
             <div class="out-sub" id="out-sub">原图 2400 × 1489 · 按原始像素裁切</div>
 
-            <div class="sub-label" id="quality-label" title="标准压缩优先减小文件；高档保留更多细节，PNG 高档为无损保存">质量 · 全部图片</div>
+            <div class="sub-label" id="quality-label" title="标准：JPEG q80，PNG 256 色；高：JPEG q95，PNG 无损">质量 · 全部图片</div>
             <div class="seg" id="quality-seg" role="radiogroup" aria-label="输出质量">
               <button id="quality-compressed" type="button" role="radio" aria-checked="true" title="文件较小，可能出现压缩痕迹">标准压缩</button>
               <button id="quality-high" type="button" role="radio" aria-checked="false" title="保留更多细节，文件较大，仍会有损压缩">高质量</button>
@@ -1211,6 +1290,7 @@
             </div>
           </section>
         </div>
+        <div class="insp-fade" aria-hidden="true"></div>
         <div class="insp-foot">
           <ryugi-icon name="lock" size="12"></ryugi-icon>
           <span>源文件不会被修改</span>
@@ -1237,6 +1317,7 @@
         <ryugi-icon name="check" size="13" id="toast-check"></ryugi-icon>
         <ryugi-icon name="info" size="13" id="toast-info" hidden></ryugi-icon>
         <span id="toast-text"></span>
+        <button class="toast-action" id="toast-action" type="button" hidden>撤销</button>
       </div>
 
       <div class="scrim" id="scrim" hidden></div>
@@ -1275,7 +1356,6 @@
           <p class="sheet-note">保存时可继续使用其他应用，源文件不会被修改。</p>
         </div>
         <div class="sheet-body done-view" id="sheet-done-view" hidden>
-          <span class="done-mark"><ryugi-icon name="check" size="18"></ryugi-icon></span>
           <h3 id="done-title">已保存 8 个文件</h3>
           <p id="done-path">原图所在目录</p>
         </div>
@@ -1286,9 +1366,10 @@
         <footer class="sheet-foot" id="sheet-progress-foot" hidden>
           <button class="btn outline" id="sheet-cancel" type="button">取消</button>
         </footer>
-        <footer class="sheet-foot" id="sheet-done-foot" hidden>
+        <footer class="sheet-foot done-foot" id="sheet-done-foot" hidden>
+          <button class="btn link-btn" id="sheet-finish-clear" type="button" title="关闭摘要并清空本次列表，源文件保留">清空列表</button>
+          <span class="done-spacer"></span>
           <button class="btn outline" id="sheet-reveal" type="button">在 Finder 中显示</button>
-          <button class="btn outline" id="sheet-finish-clear" type="button" title="关闭摘要并清空本次列表，源文件保留">完成并清空</button>
           <button class="btn primary" id="sheet-finish" type="button">完成</button>
         </footer>
       </section>
@@ -1438,49 +1519,71 @@
     return stem + '_' + ratio(d).key.replace(':', 'x') + '_' + qualityTag + STAMP + ext;
   }
 
+  function fileA11yLabel(d, selected) {
+    const bits = [d.name, `${d.w} × ${d.h}`, `${mb(d.bytes)} MB`];
+    if (!isApplied(d)) bits.push('不参与保存');
+    if (selected) bits.push('当前选中');
+    return bits.join('，');
+  }
+
   function buildFileList() {
     fileList.innerHTML = '';
     active.forEach((d) => {
+      const row = document.createElement('div');
+      row.className = 'file-row';
+      row.setAttribute('role', 'listitem');
+      row.dataset.id = d.id;
+
       const b = document.createElement('div');
       b.className = 'file';
       b.setAttribute('role', 'button');
       b.tabIndex = 0;
-      b.setAttribute('aria-pressed', String(d.id === state.selectedId));
+      const selected = d.id === state.selectedId;
+      b.setAttribute('aria-current', String(selected));
+      b.setAttribute('aria-label', fileA11yLabel(d, selected));
       b.dataset.id = d.id;
       b.title = d.name;
       if (!isApplied(d)) b.classList.add('off');
       b.innerHTML =
         '<img alt="" loading="lazy" />' +
-        '<span class="fmeta-wrap"><span class="fname"></span><span class="fmeta"></span></span>' +
-        '<button class="remove" type="button" title="从列表移除，不删除源文件"><span class="glyph glyph-x" aria-hidden="true">×</span></button>' +
+        '<span class="fmeta-wrap"><span class="fname"></span><span class="fmeta"><span class="fbase"></span><span class="fskip" hidden> · 不保存</span></span></span>' +
         '<span class="fdot" hidden></span>';
       const im = b.querySelector('img');
       im.src = d.thumb;
-      im.alt = d.name;
       b.querySelector('.fname').textContent = d.name;
-      b.querySelector('.fmeta').textContent = d.w + ' × ' + d.h + ' · ' + mb(d.bytes) + ' MB';
-      const rm = b.querySelector('.remove');
-      rm.setAttribute('aria-label', '从列表移除 ' + d.name + '，不删除源文件');
-      b.addEventListener('click', (e) => {
-        if (e.target.closest('.remove')) return;
+      b.querySelector('.fbase').textContent = d.w + ' × ' + d.h + ' · ' + mb(d.bytes) + ' MB';
+      b.addEventListener('click', () => {
         selectDoc(d.id);
       });
       b.addEventListener('keydown', (e) => {
-        if (e.target.closest('.remove')) return;
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          moveSelection(e.key === 'ArrowDown' ? 1 : -1);
+        } else if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           selectDoc(d.id);
         }
       });
+
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'remove';
+      rm.title = '从列表移除，不删除源文件';
+      rm.setAttribute('aria-label', '从列表移除 ' + d.name + '，不删除源文件');
+      rm.innerHTML = '<span class="glyph glyph-x" aria-hidden="true">×</span>';
       rm.addEventListener('click', (e) => {
         e.stopPropagation();
-        askRemove(d.id, rm);
+        removeDoc(d.id);
       });
-      fileList.appendChild(b);
+
+      row.appendChild(b);
+      row.appendChild(rm);
+      fileList.appendChild(row);
     });
     if (!active.length) {
       const hint = document.createElement('div');
       hint.className = 'list-empty';
+      hint.setAttribute('role', 'presentation');
       hint.innerHTML = '暂无图片<br><span>点 + 或拖入文件</span>';
       fileList.appendChild(hint);
     }
@@ -1496,10 +1599,24 @@
       b.setAttribute('aria-checked', String(r.key === ratio().key));
       b.setAttribute('aria-label', r.key + '，' + r.use);
       b.dataset.key = r.key;
+      b.tabIndex = r.key === ratio().key ? 0 : -1;
       b.innerHTML =
         '<span class="glyph"><i style="width:' + r.gw + 'px;height:' + r.gh + 'px"></i></span>' +
         '<span class="lbl">' + r.key + '</span>';
       b.addEventListener('click', () => setRatio(r.key));
+      b.addEventListener('keydown', (e) => {
+        const i = RATIOS.findIndex((x) => x.key === r.key);
+        let next = -1;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (i + 1) % RATIOS.length;
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (i - 1 + RATIOS.length) % RATIOS.length;
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = RATIOS.length - 1;
+        if (next < 0) return;
+        e.preventDefault();
+        const key = RATIOS[next].key;
+        setRatio(key);
+        ratioGrid.querySelector('.ratio[data-key="' + key + '"]')?.focus();
+      });
       ratioGrid.appendChild(b);
     });
   }
@@ -1510,6 +1627,16 @@
     state.selectedId = id;
     ensureCrop(d);
     updateAll();
+  }
+
+  function moveSelection(delta) {
+    if (!active.length) return;
+    const i = active.findIndex((d) => d.id === state.selectedId);
+    const next = active[clamp(i + delta, 0, active.length - 1)];
+    if (!next) return;
+    selectDoc(next.id);
+    const row = fileList.querySelector('.file[data-id="' + next.id + '"]');
+    if (row) row.focus({ preventScroll: true });
   }
 
   function addOne() {
@@ -1735,12 +1862,30 @@
     });
   });
 
+  let lastRemoved = null;
+  let undoCleanup = 0;
+
+  function forgetRemoved() {
+    clearTimeout(undoCleanup);
+    const s = lastRemoved;
+    lastRemoved = null;
+    if (s && s.doc.src.startsWith('blob:')) URL.revokeObjectURL(s.doc.src);
+  }
+
   function removeDoc(id) {
     const i = active.findIndex((d) => d.id === id);
     if (i < 0) return;
     const wasSelected = state.selectedId === id;
     const [removed] = active.splice(i, 1);
-    if (removed.src.startsWith('blob:')) URL.revokeObjectURL(removed.src);
+    forgetRemoved();
+    lastRemoved = {
+      doc: removed,
+      index: i,
+      ratio: state.ratios.get(id),
+      crop: state.crops.get(id),
+      skipped: state.skipped.has(id),
+      wasSelected
+    };
     state.ratios.delete(id);
     state.crops.delete(id);
     state.skipped.delete(id);
@@ -1752,21 +1897,36 @@
     }
     buildFileList();
     updateAll();
-    const sel = fileList.querySelector('.file[aria-pressed="true"]');
+    const sel = fileList.querySelector('.file[aria-current="true"]');
     (sel || $('add-btn')).focus({ preventScroll: true });
-    showToast('已从列表移除，源文件未删除');
+    clearTimeout(undoCleanup);
+    undoCleanup = setTimeout(() => {
+      if (!lastRemoved) return;
+      const s = lastRemoved;
+      lastRemoved = null;
+      if (s.doc.src.startsWith('blob:')) URL.revokeObjectURL(s.doc.src);
+    }, 5600);
+    showToast('已移除 ' + removed.name, undefined, { label: '撤销', onClick: undoRemove });
   }
 
-  function askRemove(id, trigger) {
-    const d = active.find((x) => x.id === id);
-    if (!d) return;
-    openConfirm({
-      title: '移除这张图片？',
-      message: '「' + d.name + '」会从本次列表移除。源文件不会被删除。',
-      confirmLabel: '移除',
-      returnFocus: trigger,
-      onConfirm: () => removeDoc(id)
-    });
+  function undoRemove() {
+    if (!lastRemoved) return;
+    const s = lastRemoved;
+    lastRemoved = null;
+    clearTimeout(undoCleanup);
+    active.splice(Math.min(s.index, active.length), 0, s.doc);
+    if (s.ratio) state.ratios.set(s.doc.id, s.ratio);
+    else state.ratios.delete(s.doc.id);
+    if (s.crop) state.crops.set(s.doc.id, s.crop);
+    else state.crops.delete(s.doc.id);
+    if (s.skipped) state.skipped.add(s.doc.id);
+    else state.skipped.delete(s.doc.id);
+    state.selectedId = s.doc.id;
+    buildFileList();
+    updateAll();
+    const row = fileList.querySelector('.file[data-id="' + s.doc.id + '"]');
+    if (row && !saveOpen && !confirmOpen) row.focus({ preventScroll: true });
+    showToast('已恢复 ' + s.doc.name);
   }
 
   function clearDocs() {
@@ -1774,6 +1934,7 @@
     active.forEach((d) => {
       if (d.src.startsWith('blob:')) URL.revokeObjectURL(d.src);
     });
+    forgetRemoved();
     active = [];
     state.ratios.clear();
     state.crops.clear();
@@ -1848,6 +2009,18 @@
     updateImage();
     updateCropVars();
     updateInspector();
+    scheduleInspectorOverflow();
+  }
+
+  const inspScroll = document.querySelector('.insp-scroll');
+  let inspRaf = 0;
+  function syncInspectorOverflow() {
+    const more = inspScroll.scrollHeight - inspScroll.clientHeight - inspScroll.scrollTop > 4;
+    document.querySelector('.inspector').classList.toggle('has-more', more);
+  }
+  function scheduleInspectorOverflow() {
+    cancelAnimationFrame(inspRaf);
+    inspRaf = requestAnimationFrame(syncInspectorOverflow);
   }
 
   function updateEmptyState() {
@@ -1861,6 +2034,7 @@
     $('out-sub').textContent = '添加图片后显示';
     $('output-format').textContent = '格式跟随原图';
     $('quality-high').textContent = '高质量';
+    $('quality-compressed').textContent = '标准压缩';
     $('quality-note').textContent = '';
     $('quality-high').disabled = true;
     $('quality-compressed').disabled = true;
@@ -1873,6 +2047,7 @@
     $('apply-toggle').setAttribute('aria-checked', 'false');
     $('copy-name').disabled = true;
     $('save-all').disabled = true;
+    $('stage-note').hidden = true;
     $('save-count').textContent = '0';
     $('count').textContent = '0';
     $('side-foot').textContent = '0 张';
@@ -1884,8 +2059,10 @@
       const d = active.find((x) => x.id === b.dataset.id);
       if (!d) return;
       const selected = d.id === state.selectedId;
-      b.setAttribute('aria-pressed', String(selected));
+      b.setAttribute('aria-current', String(selected));
+      b.setAttribute('aria-label', fileA11yLabel(d, selected));
       b.classList.toggle('off', !isApplied(d));
+      b.querySelector('.fskip').hidden = isApplied(d);
       const c = ensureCrop(d);
       b.querySelector('.fdot').hidden = !isCustom(d, c);
     });
@@ -1893,8 +2070,10 @@
 
   function updateRatioGrid() {
     ratioGrid.querySelectorAll('.ratio').forEach((b) => {
+      const checked = Boolean(doc()) && b.dataset.key === ratio().key;
       b.disabled = !doc();
-      b.setAttribute('aria-checked', String(Boolean(doc()) && b.dataset.key === ratio().key));
+      b.setAttribute('aria-checked', String(checked));
+      b.tabIndex = checked ? 0 : -1;
     });
     $('ratio-hint').textContent = doc() ? ratio().key + ' · ' + ratio().use : '添加图片后选择比例';
   }
@@ -1951,17 +2130,20 @@
     qc.disabled = false;
     qh.textContent = isPng ? '无损保存' : '高质量';
     qh.title = isPng ? '保留全部颜色和透明背景，不做有损压缩' : '保留更多细节，文件较大，仍会有损压缩';
-    qc.title = isPng ? '文件较小，保留透明背景，可能影响渐变和细节' : '文件较小，可能出现压缩痕迹';
+    qc.textContent = isPng ? '256 色' : '标准压缩';
+    qc.title = isPng ? '降到 256 色，保留透明背景；渐变和细节会受影响' : '文件较小，可能出现压缩痕迹';
     qh.setAttribute('aria-checked', String(state.quality === 'high'));
     qc.setAttribute('aria-checked', String(state.quality === 'compressed'));
     $('quality-seg').classList.remove('disabled');
 
     if (isPng && state.quality === 'high') {
-      $('quality-note').textContent = '保留全部颜色 · 保留透明背景';
+      $('quality-note').textContent = '无损 · 保留透明背景';
+    } else if (isPng) {
+      $('quality-note').textContent = '256 色 · 保留透明背景';
     } else if (state.quality === 'high') {
-      $('quality-note').textContent = '保留更多细节';
+      $('quality-note').textContent = 'JPEG q95 · 保留更多细节';
     } else {
-      $('quality-note').textContent = '文件较小';
+      $('quality-note').textContent = 'JPEG q80 · 文件较小';
     }
 
     const fullName = filename(d);
@@ -1984,21 +2166,40 @@
     $('apply-toggle').disabled = false;
     $('apply-toggle').setAttribute('aria-checked', String(applied));
     $('save-count').textContent = String(appliedDocs().length);
+    $('stage-note').hidden = applied;
     $('save-all').disabled = importing || reading || !appliedDocs().length;
     $('count').textContent = String(active.length);
     $('side-foot').textContent = importing || reading ? '正在读取图片…' : active.length + ' 张 · ' + mb(totalBytes()) + ' MB';
   }
 
   let toastTimer = null;
-  function showToast(text, type) {
+  let toastAction = null;
+  function showToast(text, type, action) {
     $('toast-text').textContent = text;
     const isInfo = type === 'info';
     $('toast-check').hidden = isInfo;
     $('toast-info').hidden = !isInfo;
+    const btn = $('toast-action');
+    toastAction = action || null;
+    btn.hidden = !toastAction;
+    btn.textContent = toastAction ? toastAction.label : '撤销';
+    btn.onclick = toastAction ? () => {
+      const fn = toastAction;
+      toastAction = null;
+      btn.hidden = true;
+      $('toast').classList.remove('show');
+      clearTimeout(toastTimer);
+      fn.onClick();
+    } : null;
     const el = $('toast');
     el.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+    const wait = toastAction ? 5200 : 2400;
+    toastTimer = setTimeout(() => {
+      el.classList.remove('show');
+      btn.hidden = true;
+      toastAction = null;
+    }, wait);
   }
 
   let drag = null;
@@ -2103,6 +2304,35 @@
   let confirmReturnFocus = null;
   let confirmTimer = null;
 
+  function syncModalInert() {
+    const on = saveOpen || confirmOpen;
+    document.querySelectorAll('.toolbar, .sidebar, .canvas, .inspector, .status, .toast-action').forEach((el) => {
+      el.inert = on;
+    });
+  }
+
+  function focusable(root) {
+    return Array.from(root.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+      .filter((el) => el.getClientRects().length > 0);
+  }
+
+  function trapTab(e, root) {
+    const list = focusable(root);
+    if (!list.length) return;
+    const first = list[0];
+    const last = list[list.length - 1];
+    if (!root.contains(document.activeElement)) {
+      e.preventDefault();
+      first.focus({ preventScroll: true });
+    } else if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus({ preventScroll: true });
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus({ preventScroll: true });
+    }
+  }
+
   function openConfirm(opts) {
     if (confirmOpen) return;
     confirmOpen = true;
@@ -2111,6 +2341,7 @@
     $('confirm-title').textContent = opts.title;
     $('confirm-msg').textContent = opts.message;
     $('confirm-ok').textContent = opts.confirmLabel || '确认';
+    $('confirm-ok').className = 'btn ' + (opts.danger === false ? 'primary' : 'danger');
     clearTimeout(confirmTimer);
     $('confirm-scrim').hidden = false;
     $('confirm').hidden = false;
@@ -2119,6 +2350,7 @@
       $('confirm').classList.add('open');
     });
     $('confirm-cancel').focus({ preventScroll: true });
+    syncModalInert();
   }
 
   function closeConfirm() {
@@ -2131,6 +2363,7 @@
       $('confirm-scrim').hidden = true;
       $('confirm').hidden = true;
     }, 180);
+    syncModalInert();
     const f = confirmReturnFocus;
     confirmReturnFocus = null;
     if (f && f.isConnected) f.focus({ preventScroll: true });
@@ -2182,7 +2415,7 @@
     const jpg = docs.length - png;
     const parts = [];
     if (jpg) parts.push('JPEG ' + (state.quality === 'high' ? '高质量' : '标准压缩'));
-    if (png) parts.push('PNG ' + (state.quality === 'high' ? '无损保存' : '标准压缩'));
+    if (png) parts.push('PNG ' + (state.quality === 'high' ? '无损保存' : '256 色'));
     return parts.join(' · ') || '按原格式';
   }
 
@@ -2235,6 +2468,7 @@
       $('sheet').classList.add('open');
     });
     $('sheet-start').focus({ preventScroll: true });
+    syncModalInert();
   }
 
   function startSave() {
@@ -2306,6 +2540,7 @@
       $('scrim').hidden = true;
       $('sheet').hidden = true;
     }, 200);
+    syncModalInert();
     const target = focusEl && typeof focusEl.focus === 'function' ? focusEl : $('save-all');
     target.focus({ preventScroll: true });
   }
@@ -2336,8 +2571,10 @@
       layoutPhoto();
     });
 
-    new ResizeObserver(() => layoutPhoto()).observe(stage);
-    img.addEventListener('load', () => layoutPhoto());
+    new ResizeObserver(() => { layoutPhoto(); syncInspectorOverflow(); }).observe(stage);
+    img.addEventListener('load', () => { layoutPhoto(); syncInspectorOverflow(); });
+    inspScroll.addEventListener('scroll', syncInspectorOverflow, { passive: true });
+    window.addEventListener('resize', () => { layoutPhoto(); syncInspectorOverflow(); });
 
     cropEl.addEventListener('pointerdown', startMove);
     document.querySelectorAll('.handle').forEach((h) => {
@@ -2432,6 +2669,24 @@
     });
 
     window.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        if (!saveOpen && !confirmOpen) addOne();
+        return;
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !saveOpen && !confirmOpen) {
+        const t = e.target;
+        if (t instanceof Element && t.closest('input, textarea, [contenteditable="true"]')) return;
+        const d = doc();
+        if (!d) return;
+        e.preventDefault();
+        removeDoc(d.id);
+        return;
+      }
+      if (e.key === 'Tab' && (saveOpen || confirmOpen)) {
+        trapTab(e, confirmOpen ? $('confirm') : $('sheet'));
+        return;
+      }
       if (confirmOpen) {
         if (e.key === 'Escape') {
           e.preventDefault();

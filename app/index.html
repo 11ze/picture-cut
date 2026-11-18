@@ -48,6 +48,7 @@
 
       <main class="canvas" id="canvas">
         <div class="stage" id="stage">
+          <div class="stage-note" id="stage-note" hidden>不参与本次保存</div>
           <div class="empty" id="empty" hidden>
             <span class="empty-mark" aria-hidden="true"><span class="glyph glyph-plus lg">+</span></span>
             <div class="empty-title">把图片加入本次列表</div>
@@ -88,7 +89,7 @@
         </div>
         <div class="insp-scroll">
           <section class="sec">
-            <div class="sec-label">比例 · 当前图片</div>
+            <div class="sec-label"><span>比例 · 当前图片</span></div>
             <div class="ratio-grid" id="ratio-grid" role="radiogroup" aria-label="裁切比例"></div>
             <div class="ratio-hint" id="ratio-hint">16:9 · 桌面壁纸</div>
           </section>
@@ -127,6 +128,7 @@
             </div>
           </section>
         </div>
+        <div class="insp-fade" aria-hidden="true"></div>
         <div class="insp-foot">
           <ryugi-icon name="lock" size="12"></ryugi-icon>
           <span>源文件不会被修改</span>
@@ -153,6 +155,7 @@
         <ryugi-icon name="check" size="13" id="toast-check"></ryugi-icon>
         <ryugi-icon name="info" size="13" id="toast-info" hidden></ryugi-icon>
         <span id="toast-text"></span>
+        <button class="toast-action" id="toast-action" type="button" hidden>撤销</button>
       </div>
 
       <div class="scrim" id="scrim" hidden></div>
@@ -191,7 +194,6 @@
           <p class="sheet-note">保存时可继续使用其他应用，源文件不会被修改。</p>
         </div>
         <div class="sheet-body done-view" id="sheet-done-view" hidden>
-          <span class="done-mark"><ryugi-icon name="check" size="18"></ryugi-icon></span>
           <h3 id="done-title">已保存 8 个文件</h3>
           <p id="done-path">原图所在目录</p>
         </div>
@@ -202,9 +204,10 @@
         <footer class="sheet-foot" id="sheet-progress-foot" hidden>
           <button class="btn outline" id="sheet-cancel" type="button">取消</button>
         </footer>
-        <footer class="sheet-foot" id="sheet-done-foot" hidden>
+        <footer class="sheet-foot done-foot" id="sheet-done-foot" hidden>
+          <button class="btn link-btn" id="sheet-finish-clear" type="button" title="关闭摘要并清空本次列表，源文件保留">清空列表</button>
+          <span class="done-spacer"></span>
           <button class="btn outline" id="sheet-reveal" type="button">在 Finder 中显示</button>
-          <button class="btn outline" id="sheet-finish-clear" type="button" title="关闭摘要并清空本次列表，源文件保留">完成并清空</button>
           <button class="btn primary" id="sheet-finish" type="button">完成</button>
         </footer>
       </section>

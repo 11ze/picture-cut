@@ -121,13 +121,13 @@ test('only JPEG and PNG images can be imported and each keeps its output format'
   assert.equal(await page.locator('#quality-high').isEnabled(), true);
   assert.equal(await page.locator('#quality-compressed').isEnabled(), true);
   assert.equal(await page.locator('#quality-high').innerText(), '无损保存');
-  assert.equal(await page.locator('#quality-note').innerText(), '文件较小');
+  assert.equal(await page.locator('#quality-note').innerText(), '256 色 · 保留透明背景');
   assert.match(await page.locator('#quality-compressed').getAttribute('title'), /保留透明背景/);
   assert.match(await page.locator('#filename').innerText(), /\.png$/);
   const compressedName = await page.locator('#filename').innerText();
   await page.locator('#quality-high').click();
   assert.equal(await page.locator('#quality-high').getAttribute('aria-checked'), 'true');
-  assert.equal(await page.locator('#quality-note').innerText(), '保留全部颜色 · 保留透明背景');
+  assert.equal(await page.locator('#quality-note').innerText(), '无损 · 保留透明背景');
   assert.notEqual(await page.locator('#filename').innerText(), compressedName);
   await page.locator('#save-all').click();
   assert.equal(await page.locator('#summary-quality').innerText(), 'JPEG 高质量 · PNG 无损保存');
@@ -140,7 +140,7 @@ test('only JPEG and PNG images can be imported and each keeps its output format'
   assert.equal(await page.locator('#quality-high').innerText(), '高质量');
   assert.match(await page.locator('#filename').innerText(), /\.JPEG$/);
   await page.locator('#save-all').click();
-  assert.equal(await page.locator('#summary-quality').innerText(), 'JPEG 标准压缩 · PNG 标准压缩');
+  assert.equal(await page.locator('#summary-quality').innerText(), 'JPEG 标准压缩 · PNG 256 色');
   assert.equal(await page.locator('#summary-format').innerText(), 'JPEG · PNG（跟随原图）');
   const names = await page.locator('#summary-list .sname').allTextContents();
   assert.match(names[3], /^transparent_16x9_.*\.png$/);
@@ -394,4 +394,145 @@ test('a folder picked in the dialog leaves out other files without counting them
   await page.locator('.file').filter({ hasText: 'other.png' }).waitFor();
   assert.equal(await page.locator('#count').innerText(), '5');
   assert.match(await page.locator('#toast-text').innerText(), /^已添加 2 张$/);
+});
+
+test('the inspector fits a 790px window without scrolling', async t => {
+  const page = await openPrototype(t);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await settleLayout(page);
+  const size = await page.locator('.insp-scroll').evaluate(sc => ({ client: sc.clientHeight, scroll: sc.scrollHeight }));
+  assert.ok(size.scroll <= size.client + 1, `inspector overflows: ${size.scroll} > ${size.client}`);
+});
+
+test('Tab stays inside the save sheet', async t => {
+  const page = await openPrototype(t);
+  await page.locator('#save-all').click();
+  await page.locator('#sheet').waitFor({ state: 'visible' });
+  for (let i = 0; i < 12; i++) await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => Boolean(document.activeElement?.closest('#sheet'))), true);
+  assert.equal(await page.evaluate(() => document.querySelector('.toolbar').inert), true);
+});
+
+test('Tab stays inside the confirm dialog', async t => {
+  const page = await openPrototype(t);
+  await page.locator('#add-btn').click();
+  await page.locator('#add-clear').click();
+  await page.locator('#confirm').waitFor({ state: 'visible' });
+  for (let i = 0; i < 8; i++) await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => Boolean(document.activeElement?.closest('#confirm'))), true);
+  assert.equal(await page.evaluate(() => document.querySelector('.toolbar').inert), true);
+});
+
+test('the toast action is unavailable while a modal is open', async t => {
+  const page = await openPrototype(t);
+  await page.locator('.file-row[data-id="city"] .remove').click();
+  await page.locator('#save-all').click();
+  await page.locator('#sheet').waitFor({ state: 'visible' });
+  assert.equal(await page.evaluate(() => document.querySelector('#toast-action').inert), true);
+  assert.equal(await page.locator('#toast-action').isVisible(), false);
+
+  await page.locator('#summary-cancel').click();
+  await page.locator('#sheet').waitFor({ state: 'hidden' });
+  await page.locator('.file-row[data-id="mountain-lake"] .remove').click();
+  await page.locator('#add-btn').click();
+  await page.locator('#add-clear').click();
+  await page.locator('#confirm').waitFor({ state: 'visible' });
+  assert.equal(await page.evaluate(() => document.querySelector('#toast-action').inert), true);
+  assert.equal(await page.locator('#toast-action').isVisible(), false);
+});
+
+test('the ratio group has no apply-to-all control', async t => {
+  const page = await openPrototype(t);
+  assert.equal(await page.locator('#ratio-all').count(), 0);
+  assert.equal(await page.getByRole('button', { name: '应用到全部' }).count(), 0);
+});
+
+test('removing an image offers an undo', async t => {
+  const page = await openPrototype(t);
+  assert.equal(await page.locator('.file').count(), 3);
+  await page.locator('.file-row[data-id="city"] .remove').click();
+  assert.equal(await page.locator('.file').count(), 2);
+  await page.locator('#toast-action').click();
+  assert.equal(await page.locator('.file').count(), 3);
+  assert.equal(await page.locator('.file[data-id="city"]').getAttribute('aria-current'), 'true');
+});
+
+test('keyboard opens, moves in and removes from the list', async t => {
+  const page = await openPrototype(t);
+  await page.locator('.file[data-id="city"]').focus();
+  await page.keyboard.press('ArrowDown');
+  assert.equal(await page.locator('.file[data-id="mountain-lake"]').getAttribute('aria-current'), 'true');
+  await page.keyboard.press('Delete');
+  assert.equal(await page.locator('.file').count(), 2);
+  await page.locator('#toast-action').click();
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser', { timeout: 2000 }),
+    page.keyboard.press('Meta+O'),
+  ]);
+  assert.ok(chooser);
+});
+test('PNG standard quality says 256 colors', async t => {
+  const page = await openPrototype(t);
+  await page.locator('.file[data-id="coffee"]').click();
+  assert.equal(await page.locator('#quality-compressed').textContent(), '256 色');
+  assert.match(await page.locator('#quality-note').textContent(), /256 色/);
+  await page.locator('#save-all').click();
+  await page.locator('#sheet-summary-view:not([hidden])').waitFor();
+  assert.match(await page.locator('#summary-quality').textContent(), /PNG 256 色/);
+});
+
+test('the done screen shows the saved result once', async t => {
+  const page = await openPrototype(t);
+  await page.locator('#save-all').click();
+  await page.locator('#sheet-start').click();
+  await page.locator('#sheet-done-view:not([hidden])').waitFor();
+  assert.equal(await page.locator('#sheet-done-view .done-mark').count(), 0);
+  const text = await page.locator('#sheet-done-view').innerText();
+  assert.equal((text.match(/已保存/g) || []).length, 1);
+});
+
+test('the image list exposes list items with separate remove buttons', async t => {
+  const page = await openPrototype(t);
+  const shape = await page.evaluate(() => {
+    const list = document.querySelector('#file-list');
+    const rows = [...list.querySelectorAll(':scope > .file-row')];
+    return {
+      role: list.getAttribute('role'),
+      rows: rows.length,
+      listitems: rows.every((row) => row.getAttribute('role') === 'listitem'),
+      buttons: rows.every((row) => row.querySelector(':scope > .file[role="button"][aria-current]')),
+      pressed: rows.some((row) => row.querySelector(':scope > .file[aria-pressed]')),
+      cleanAlts: rows.every((row) => row.querySelector(':scope > .file img')?.getAttribute('alt') === ''),
+      removes: rows.every((row) => row.querySelector(':scope > .remove')?.getAttribute('aria-label')),
+      nested: rows.some((row) => row.querySelector('.file .remove')),
+    };
+  });
+  assert.equal(shape.role, 'list');
+  assert.equal(shape.rows, 3);
+  assert.equal(shape.listitems, true);
+  assert.equal(shape.buttons, true);
+  assert.equal(shape.pressed, false);
+  assert.equal(shape.cleanAlts, true);
+  assert.equal(shape.removes, true);
+  assert.equal(shape.nested, false);
+  assert.equal(await page.locator('.file[data-id="city"]').getAttribute('aria-current'), 'true');
+  assert.match(await page.locator('.file[data-id="city"]').getAttribute('aria-label'), /当前选中/);
+  await page.locator('.file[data-id="mountain-lake"]').click();
+  assert.equal(await page.locator('.file[data-id="city"]').getAttribute('aria-current'), 'false');
+  assert.doesNotMatch(await page.locator('.file[data-id="city"]').getAttribute('aria-label'), /当前选中/);
+});
+
+test('the ratio group exposes one checked radio', async t => {
+  const page = await openPrototype(t);
+  assert.equal(await page.locator('#ratio-grid').getAttribute('role'), 'radiogroup');
+  const radios = page.locator('#ratio-grid .ratio');
+  assert.equal(await radios.count(), 9);
+  assert.equal(await page.locator('#ratio-grid .ratio[role="radio"][aria-checked="true"]').count(), 1);
+  await page.getByRole('radio', { name: '1:1，头像', exact: true }).click();
+  assert.equal(await page.locator('#ratio-grid .ratio[aria-checked="true"] .lbl').textContent(), '1:1');
+  const tabStops = await page.locator('#ratio-grid .ratio').evaluateAll((els) => els.filter((el) => el.tabIndex === 0).length);
+  assert.equal(tabStops, 1);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForFunction(() => document.querySelector('#ratio-grid .ratio[aria-checked="true"] .lbl')?.textContent === '4:3');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-key')), '4:3');
 });
