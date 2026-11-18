@@ -53,10 +53,8 @@ npm test                    # 原型自身的回归，23 个用例
 发版由 [.github/workflows/release.yml](.github/workflows/release.yml) 完成，本机只负责打 tag。
 
 1. 改 `app/mygo.config.ts` 的 `version`，提交并推送到 `main`。
-2. 在仓库根目录运行 `scripts/release.sh`。它检查版本号一致、当前在 `main` 且与远端同步、工作区干净、tag 未存在，通过后打印打 tag 的命令。
-3. 按提示执行，或运行 `scripts/release.sh --push` 让脚本打 tag 并推送。
-
-工作流先在 `Check version` 比对 tag 和配置，再在 macOS、Windows、Linux 三个 runner 上构建，把安装包传到 GitHub Release。版本不一致或构建失败都不会产生 release。
+2. 打 tag 推送：`git tag -a v0.2.2 -m "version 0.2.2" && git push origin v0.2.2`。
+3. Actions 的 Release 工作流先校验 tag 与配置一致，再在 macOS、Windows、Linux 三个 runner 上构建，把安装包传到 [Releases](https://github.com/11ze/picture-cut/releases)。版本不一致或构建失败不会产生 release。
 
 补发已有 tag：`gh workflow run release.yml -f tag=v0.2.1`。发布说明由 [scripts/release-notes.sh](scripts/release-notes.sh) 按提交前缀生成，覆盖上一个 tag 之后的提交。
 
