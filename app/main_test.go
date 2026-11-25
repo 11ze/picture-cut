@@ -508,3 +508,84 @@ func TestSaveWritesTheNamesTheSheetShows(t *testing.T) {
 		t.Fatalf("wrote %q, the sheet showed %q", got, names[1])
 	}
 }
+
+func TestSaveKeepsFileCreatedAfterBatchPlanning(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "photo.png")
+	writeImage(t, src, 20, 10, "png")
+	lib := newTestLibrary(t)
+	img := lib.ImportPaths([]string{src}).Images[0]
+	item := SaveItem{ID: img.ID, Ratio: "1:1", Crop: Crop{W: 1, H: 1}}
+	base := "photo_1x1_" + lib.stamp
+	occupied := filepath.Join(dir, base+"-2.png")
+	report, err := lib.save(context.Background(), SaveRequest{Items: []SaveItem{item, item}, Quality: "high", InPlace: true}, func(p Progress) error {
+		if p.Done == 1 {
+			return os.WriteFile(occupied, []byte("another task"), 0644)
+		}
+		return nil
+	})
+	data, readErr := os.ReadFile(occupied)
+	if err != nil || readErr != nil || string(data) != "another task" || len(report.Saved) != 2 || filepath.Base(report.Saved[1]) != base+"-3.png" {
+		t.Fatalf("existing output preserved = %v, report = %+v, errors = %v, %v", string(data) == "another task", report, err, readErr)
+	}
+}
+
+func TestReleaseImagesDropsPreviewAndThumbnailButKeepsSource(t *testing.T) {
+	lib := newTestLibrary(t)
+	path := filepath.Join(t.TempDir(), "photo.png")
+	writeImage(t, path, 12, 10, "png")
+	images := lib.ImportPaths([]string{path, path}).Images
+	lib.ReleaseImages([]string{images[0].ID})
+	for i, img := range images {
+		for _, serve := range []http.HandlerFunc{lib.serveImage, lib.serveThumb} {
+			rec := httptest.NewRecorder()
+			serve(rec, httptest.NewRequest("GET", "/"+img.ID, nil))
+			want := http.StatusOK
+			if i == 0 {
+				want = http.StatusNotFound
+			}
+			if rec.Code != want {
+				t.Fatalf("image %d: status %d, want %d", i, rec.Code, want)
+			}
+		}
+	}
+}
+
+func TestConcurrentSavesKeepBothCrops(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "photo.png")
+	writeImage(t, src, 20, 10, "png")
+	lib := newTestLibrary(t)
+	img := lib.ImportPaths([]string{src}).Images[0]
+	start := make(chan struct{})
+	type outcome struct {
+		report Report
+		err    error
+		width  int
+	}
+	results := make(chan outcome, 2)
+	for _, width := range []int{10, 20} {
+		go func() {
+			<-start
+			item := SaveItem{ID: img.ID, Ratio: "1:1", Crop: Crop{W: float64(width) / 20, H: 1}}
+			report, err := lib.Save(context.Background(), SaveRequest{Items: []SaveItem{item}, InPlace: true, Quality: "high"}, nil)
+			results <- outcome{report, err, width}
+		}()
+	}
+	close(start)
+	first, second := <-results, <-results
+	for _, result := range []outcome{first, second} {
+		if result.err != nil || len(result.report.Saved) != 1 {
+			t.Fatalf("save: %+v", result)
+		}
+		f, err := os.Open(result.report.Saved[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := png.DecodeConfig(f)
+		f.Close()
+		if err != nil || cfg.Width != result.width {
+			t.Fatalf("crop width %d, want %d; err %v", cfg.Width, result.width, err)
+		}
+	}
+}

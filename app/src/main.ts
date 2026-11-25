@@ -440,7 +440,7 @@ function updateInspector(): void {
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-type ToastAction = { label: string; onClick: () => void };
+type ToastAction = { label: string; onClick: () => void; onExpire: () => void };
 let toastAction: ToastAction | null = null;
 
 function showToast(text: string, type: Toast = "ok", action?: ToastAction): void {
@@ -449,6 +449,7 @@ function showToast(text: string, type: Toast = "ok", action?: ToastAction): void
   $("toast-check").hidden = isInfo;
   $("toast-info").hidden = !isInfo;
   const btn = $<HTMLButtonElement>("toast-action");
+  toastAction?.onExpire();
   toastAction = action ?? null;
   btn.hidden = !toastAction;
   btn.textContent = toastAction?.label ?? "撤销";
@@ -469,6 +470,7 @@ function showToast(text: string, type: Toast = "ok", action?: ToastAction): void
   toastTimer = setTimeout(() => {
     el.classList.remove("show");
     btn.hidden = true;
+    toastAction?.onExpire();
     toastAction = null;
   }, wait);
 }
@@ -740,6 +742,14 @@ function showDone(result: Report): void {
   if (skipped) title += `，${skipped} 张不参与`;
   if (failed) title += `，${failed} 个失败`;
   $("done-title").textContent = title;
+  const details = $<HTMLDetailsElement>("done-failures");
+  details.open = false;
+  details.hidden = failed === 0;
+  $("failure-list").replaceChildren(...result.failed.map((failure) => {
+    const row = document.createElement("li");
+    row.textContent = `${failure.name}：${failure.error}`;
+    return row;
+  }));
   if (failed) {
     const first = result.failed[0];
     if (first) showToast(`${first.name}：${first.error}`, "info");
@@ -783,7 +793,7 @@ function syncModalInert(): void {
 function focusable(root: HTMLElement): HTMLElement[] {
   return Array.from(
     root.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      'button:not([disabled]), summary, a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
     ),
   ).filter((el) => el.getClientRects().length > 0);
 }
@@ -847,14 +857,17 @@ function closeConfirm(): void {
   if (f?.isConnected) f.focus({ preventScroll: true });
 }
 
-let lastRemoved: {
+type RemovedImage = {
   doc: NonNullable<ReturnType<typeof doc>>;
   index: number;
   ratio: string | undefined;
   crop: Crop | undefined;
   excluded: boolean;
-  wasSelected: boolean;
-} | null = null;
+};
+
+function releaseImages(ids: string[]): void {
+  void Library.releaseImages(ids).catch((err) => console.error("ReleaseImages", err));
+}
 
 function removeDoc(id: string): void {
   const i = state.docs.findIndex((d) => d.id === id);
@@ -862,13 +875,12 @@ function removeDoc(id: string): void {
   const wasSelected = state.selectedId === id;
   const [removed] = state.docs.splice(i, 1);
   if (!removed) return;
-  lastRemoved = {
+  const snapshot: RemovedImage = {
     doc: removed,
     index: i,
     ratio: state.ratios.get(id),
     crop: state.crops.get(id),
     excluded: state.excluded.has(id),
-    wasSelected,
   };
   state.ratios.delete(id);
   state.crops.delete(id);
@@ -885,13 +897,14 @@ function removeDoc(id: string): void {
   refreshNamesLater();
   const sel = fileList.querySelector<HTMLElement>('.file[aria-current="true"]');
   (sel ?? $("add-btn")).focus({ preventScroll: true });
-  showToast(`已移除 ${removed.name}`, "ok", { label: "撤销", onClick: undoRemove });
+  showToast(`已移除 ${removed.name}`, "ok", {
+    label: "撤销",
+    onClick: () => undoRemove(snapshot),
+    onExpire: () => releaseImages([id]),
+  });
 }
 
-function undoRemove(): void {
-  if (!lastRemoved) return;
-  const s = lastRemoved;
-  lastRemoved = null;
+function undoRemove(s: RemovedImage): void {
   state.docs.splice(Math.min(s.index, state.docs.length), 0, s.doc);
   if (s.ratio) state.ratios.set(s.doc.id, s.ratio);
   else state.ratios.delete(s.doc.id);
@@ -910,8 +923,8 @@ function undoRemove(): void {
 
 function clearDocs(): void {
   if (!state.docs.length) return;
+  releaseImages(state.docs.map((d) => d.id));
   state.docs = [];
-  lastRemoved = null;
   state.ratios.clear();
   state.crops.clear();
   state.excluded.clear();

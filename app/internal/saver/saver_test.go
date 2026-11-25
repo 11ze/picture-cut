@@ -1,6 +1,8 @@
 package saver
 
 import (
+	"context"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -41,12 +43,12 @@ func writeSource(t *testing.T) string {
 func TestSaveWritesTheCroppedRect(t *testing.T) {
 	source := writeSource(t)
 	out := filepath.Join(t.TempDir(), "out.png")
-	err := Save(Request{
+	_, err := Save(context.Background(), Request{
 		Source: source,
 		Output: out,
 		Rect:   crop.Rect{X: 50, Y: 20, W: 50, H: 40},
 		Format: naming.PNG,
-	}, naming.High)
+	}, naming.High, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,12 +77,12 @@ func TestSaveWritesTheCroppedRect(t *testing.T) {
 func TestSaveLeavesNoFileWhenTheSourceIsUnreadable(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.jpg")
-	err := Save(Request{
+	_, err := Save(context.Background(), Request{
 		Source: filepath.Join(dir, "missing.jpg"),
 		Output: out,
 		Rect:   crop.Rect{W: 10, H: 10},
 		Format: naming.JPEG,
-	}, naming.Compressed)
+	}, naming.Compressed, nil)
 	if err == nil {
 		t.Fatal("Save succeeded, want an error")
 	}
@@ -96,7 +98,7 @@ func TestSaveLeavesNoFileWhenTheSourceIsUnreadable(t *testing.T) {
 func TestSaveKeepsReadablePermissions(t *testing.T) {
 	src := writeSource(t)
 	out := filepath.Join(t.TempDir(), "out.jpg")
-	if err := Save(Request{Source: src, Output: out, Format: naming.JPEG}, naming.Compressed); err != nil {
+	if _, err := Save(context.Background(), Request{Source: src, Output: out, Format: naming.JPEG}, naming.Compressed, nil); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(out)
@@ -112,7 +114,7 @@ func TestSaveRemovesTempFileAfterEncodeFailure(t *testing.T) {
 	src := writeSource(t)
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.webp")
-	if err := Save(Request{Source: src, Output: out, Format: naming.Format("WEBP")}, naming.Compressed); err == nil {
+	if _, err := Save(context.Background(), Request{Source: src, Output: out, Format: naming.Format("WEBP")}, naming.Compressed, nil); err == nil {
 		t.Fatal("Save accepted an unsupported format")
 	}
 	entries, err := os.ReadDir(dir)
@@ -123,5 +125,65 @@ func TestSaveRemovesTempFileAfterEncodeFailure(t *testing.T) {
 		if strings.HasPrefix(e.Name(), ".picturecut-") {
 			t.Fatalf("temp file left behind: %s", e.Name())
 		}
+	}
+}
+
+func TestSaveReusesEncodedOutputAfterCollision(t *testing.T) {
+	source := writeSource(t)
+	dir := t.TempDir()
+	occupied := filepath.Join(dir, "out.jpg")
+	next := filepath.Join(dir, "out-2.jpg")
+	if err := os.WriteFile(occupied, []byte("existing output"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	written, err := Save(context.Background(), Request{
+		Source: source, Output: occupied, Format: naming.JPEG,
+	}, naming.High, func() (string, error) {
+		return next, os.Remove(source)
+	})
+	if err != nil || written != next {
+		t.Fatalf("saved %q, want %q; error: %v", written, next, err)
+	}
+	original, err := os.ReadFile(occupied)
+	if err != nil || string(original) != "existing output" {
+		t.Fatalf("existing output = %q, error: %v", original, err)
+	}
+	f, err := os.Open(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := jpeg.Decode(f); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("output entries = %v, error: %v", entries, err)
+	}
+}
+
+func TestSaveCleansUpWhenCanceledAfterCollision(t *testing.T) {
+	source := writeSource(t)
+	dir := t.TempDir()
+	occupied := filepath.Join(dir, "out.jpg")
+	if err := os.WriteFile(occupied, []byte("existing output"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	written, err := Save(ctx, Request{
+		Source: source, Output: occupied, Format: naming.JPEG,
+	}, naming.High, func() (string, error) {
+		cancel()
+		return filepath.Join(dir, "out-2.jpg"), nil
+	})
+	if written != "" || !errors.Is(err, context.Canceled) {
+		t.Fatalf("saved %q, error: %v; want cancellation", written, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 || entries[0].Name() != "out.jpg" {
+		t.Fatalf("output entries = %v, error: %v", entries, err)
 	}
 }

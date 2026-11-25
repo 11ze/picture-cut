@@ -103,11 +103,16 @@ export const Library = {
   /** PickImages asks for image files and imports the ones it can read. */
   pickImages: bind<[], ImportResult>("Library.PickImages", () => []),
   /**
-   * PreviewNames returns the output file names of items, in order, so the page
-   * shows exactly what Save writes, including the -2 suffix of a name that
+   * PreviewNames returns the output file names of items, in order, including
+   * the -2 suffix of a name that
    * already exists in the target folder or earlier in the batch.
    */
   previewNames: bind<[NameRequest[], string, boolean, string], string[]>("Library.PreviewNames", (items: NameRequest[], quality: string, inPlace: boolean, outDir: string) => [items, quality, inPlace, outDir]),
+  /**
+   * ReleaseImages drops imported records and thumbnails. Save runs already
+   * hold their own copies of the source metadata.
+   */
+  releaseImages: bind<[string[]], void>("Library.ReleaseImages", (ids: string[]) => [ids]),
   /**
    * Save writes every item and reports progress as it goes. Closing the channel
    * from the page cancels the run: written files stay, the rest are skipped.

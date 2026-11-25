@@ -249,10 +249,12 @@ func (l *Library) ChooseOutputDir(ctx context.Context) (string, error) {
 
 // target is one output file the batch will write.
 type target struct {
-	info imageinfo.Info
-	dir  string
-	name string
-	err  error
+	base     string
+	reserved map[string]bool
+	info     imageinfo.Info
+	dir      string
+	name     string
+	err      error
 }
 
 // targets resolves the folder and a reserved file name for each request, in
@@ -293,13 +295,13 @@ func (l *Library) targets(reqs []NameRequest, quality naming.Quality, inPlace bo
 			out = append(out, target{info: e.info, dir: dir, name: name, err: err})
 			continue
 		}
-		out = append(out, target{info: e.info, dir: dir, name: unique})
+		out = append(out, target{info: e.info, dir: dir, name: unique, base: name, reserved: reserved})
 	}
 	return out
 }
 
-// PreviewNames returns the output file names of items, in order, so the page
-// shows exactly what Save writes, including the -2 suffix of a name that
+// PreviewNames returns the output file names of items, in order, including
+// the -2 suffix of a name that
 // already exists in the target folder or earlier in the batch.
 func (l *Library) PreviewNames(items []NameRequest, quality string, inPlace bool, outDir string) []string {
 	plan := l.targets(items, naming.ParseQuality(quality), inPlace, outDir)
@@ -350,7 +352,11 @@ func (l *Library) save(ctx context.Context, req SaveRequest, send func(Progress)
 		var written string
 		err := t.err
 		if err == nil {
-			written, err = writeTarget(t, item, quality)
+			written, err = writeTarget(ctx, t, item, quality)
+		}
+		if err != nil && ctx.Err() != nil {
+			report.Canceled = true
+			return report, nil
 		}
 		if err != nil {
 			report.Failed = append(report.Failed, Failure{Name: name, Error: err.Error()})
@@ -372,16 +378,19 @@ func (l *Library) save(ctx context.Context, req SaveRequest, send func(Progress)
 }
 
 // writeTarget crops and encodes one planned output.
-func writeTarget(t target, item SaveItem, quality naming.Quality) (string, error) {
+func writeTarget(ctx context.Context, t target, item SaveItem, quality naming.Quality) (string, error) {
 	if err := os.MkdirAll(t.dir, 0o755); err != nil {
 		return "", err
 	}
 	out := filepath.Join(t.dir, t.name)
 	rect := crop.PixelRect(t.info.Width, t.info.Height, crop.Norm{X: item.Crop.X, Y: item.Crop.Y, W: item.Crop.W, H: item.Crop.H})
-	if err := saver.Save(saver.Request{Source: t.info.Path, Output: out, Rect: rect, Format: t.info.Format}, quality); err != nil {
-		return "", err
-	}
-	return out, nil
+	return saver.Save(ctx, saver.Request{Source: t.info.Path, Output: out, Rect: rect, Format: t.info.Format}, quality, func() (string, error) {
+		name, err := naming.Reserve(t.dir, t.base, t.reserved)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(t.dir, name), nil
+	})
 }
 
 // ShowInFolder reveals path in Finder, Explorer or the file manager.
@@ -429,6 +438,17 @@ func (l *Library) add(path string) (Image, error) {
 		Thumb:   assetURL("thumb", id),
 		Preview: assetURL("img", id),
 	}, nil
+}
+
+// ReleaseImages drops imported records and thumbnails. Save runs already
+// hold their own copies of the source metadata.
+func (l *Library) ReleaseImages(ids []string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, id := range ids {
+		delete(l.entries, id)
+		delete(l.thumbs, id)
+	}
 }
 
 // newID is an opaque name for one imported image.

@@ -126,6 +126,7 @@ async function openApp(images: FixtureImage[] = []): Promise<Page> {
         fail: [] as number[],
         loaded: false,
         dropPaths: [] as string[],
+        retained: () => Array.from(known.keys()),
         picks: 0,
         importCalls: 0,
         importDelay: 0,
@@ -159,6 +160,7 @@ async function openApp(images: FixtureImage[] = []): Promise<Page> {
       const pick = () => ({ images: stub.images.map(clone), skipped: stub.skipped });
 
       const handlers: Record<string, (...args: any[]) => unknown> = {
+        "Library.ReleaseImages": async (ids: string[]) => ids.forEach(id => known.delete(id)),
         "Library.PickImages": async () => {
           stub.picks++;
           return pick();
@@ -603,6 +605,34 @@ describe("per-image state", () => {
     expect(await name()).toBe("city_16x9_q80_20261117-103842.jpg");
   });
 
+  test("the final removed image is released after undo expires", async () => {
+    const page = await openApp([CITY]);
+    await addImages(page);
+    await page.clock.install();
+    await page.locator(".remove").click();
+    await page.clock.fastForward(6000);
+    expect(await page.locator("#toast-action").isHidden()).toBe(true);
+    expect(await page.evaluate(() => (window as any).__stub.retained())).toEqual([]);
+  });
+
+  test("removed images live through undo and are released when replaced or cleared", async () => {
+    const page = await openApp([CITY, LAKE, COFFEE]);
+    await addImages(page);
+    const retained = () => page.evaluate(() => (window as any).__stub.retained());
+    const ids = await retained();
+    await page.locator(".remove").first().click();
+    expect(await retained()).toEqual(ids);
+    await page.locator("#toast-action").click();
+    expect(await retained()).toEqual(ids);
+    await page.locator(".remove").first().click();
+    await page.locator(".remove").first().click();
+    expect(await retained()).toEqual(ids.slice(1));
+    await page.locator("#add-btn").click();
+    await page.locator("#add-clear").click();
+    await page.locator("#confirm-ok").click();
+    expect(await retained()).toEqual([]);
+  });
+
   test("removing an image frees its name", async () => {
     const page = await openApp([CITY, { ...CITY, id: "twin" }]);
     await addImages(page);
@@ -684,10 +714,10 @@ describe("save", () => {
     expect(await page.locator("#sheet").isHidden()).toBe(true);
   });
 
-  test("a failed file is counted and marked, not hidden", async () => {
+  test("the done sheet keeps every failed file and its reason", async () => {
     const page = await openApp([CITY, LAKE, STREET]);
     await page.evaluate(() => {
-      (window as unknown as { __stub: { fail: number[] } }).__stub.fail = [1];
+      (window as unknown as { __stub: { fail: number[] } }).__stub.fail = [1, 2];
     });
     await addImages(page);
     await page.locator("#save-all").click();
@@ -696,13 +726,16 @@ describe("save", () => {
     await page.waitForSelector("#sheet-done-view:not([hidden])", { timeout: 5000 });
 
     expect(await page.locator("#sheet-title").textContent()).toBe("保存未全部完成");
-    expect(await page.locator("#done-title").textContent()).toBe("已保存 2 个文件，1 个失败");
+    expect(await page.locator("#done-title").textContent()).toBe("已保存 1 个文件，2 个失败");
     expect(await page.locator("#sheet-count").textContent()).toBe("3 / 3");
     expect(await page.locator("#sheet-pct").textContent()).toBe("100%");
     const states = await page.locator(".save-item").evaluateAll((els) =>
       els.map((el) => (el as HTMLElement).dataset.state),
     );
-    expect(states).toEqual(["done", "failed", "done"]);
+    expect(states).toEqual(["done", "failed", "failed"]);
+    expect(await page.getByText("查看失败文件").count()).toBe(1);
+    await page.getByText("查看失败文件").click();
+    expect(await page.locator("#sheet-done-view li").allTextContents()).toEqual(["file-2：无法读取原图", "file-3：无法读取原图"]);
     expect(await page.locator("#toast-text").textContent()).toContain("file-2：无法读取原图");
   });
 

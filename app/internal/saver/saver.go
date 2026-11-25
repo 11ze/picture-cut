@@ -2,7 +2,10 @@
 package saver
 
 import (
+	"context"
+	"errors"
 	"image"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -17,18 +20,20 @@ import (
 // Request is one output file.
 type Request struct {
 	Source string        // the original file
-	Output string        // where to write it, already unique
+	Output string        // first output path to try
 	Rect   crop.Rect     // the crop in source pixels
 	Format naming.Format // the source's format
 }
 
-// Save decodes Source, crops Rect, and encodes it to Output. It writes through
-// a temporary file, so a failure leaves neither a partial output nor a stray
-// file behind.
-func Save(req Request, quality naming.Quality) error {
+// Save encodes the crop once. If the output exists, next can choose another
+// path in the same directory for the already encoded file.
+func Save(ctx context.Context, req Request, quality naming.Quality, next func() (string, error)) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	_, img, err := imageinfo.Load(req.Source)
 	if err != nil {
-		return err
+		return "", err
 	}
 	b := img.Bounds()
 	rect := req.Rect
@@ -53,27 +58,37 @@ func Save(req Request, quality naming.Quality) error {
 
 	tmp, err := os.CreateTemp(filepath.Dir(req.Output), ".picturecut-*")
 	if err != nil {
-		return err
+		return "", err
 	}
 	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
 	if err := encode.Encode(tmp, cropped, req.Format, quality); err != nil {
 		tmp.Close()
-		os.Remove(tmpName)
-		return err
+		return "", err
 	}
 	// CreateTemp makes the file private; output images should be readable.
 	if err := tmp.Chmod(0o644); err != nil {
 		tmp.Close()
-		os.Remove(tmpName)
-		return err
+		return "", err
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return err
+		return "", err
 	}
-	if err := os.Rename(tmpName, req.Output); err != nil {
-		os.Remove(tmpName)
-		return err
+	output := req.Output
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		err := moveExclusive(tmpName, output)
+		if err == nil {
+			return output, nil
+		}
+		if !errors.Is(err, fs.ErrExist) || next == nil {
+			return "", err
+		}
+		output, err = next()
+		if err != nil {
+			return "", err
+		}
 	}
-	return nil
 }

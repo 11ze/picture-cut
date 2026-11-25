@@ -29,7 +29,7 @@ bun run build        # build/darwin-arm64/PictureCut.app 和 .dmg
 | `src/state.ts`、`src/crop.ts` | 列表状态与裁切几何（纯函数） |
 | `src/style.css`、`index.html` | 从原型复制的样式与窗口结构 |
 
-前端只通过 `src/mygo.ts`（`mygo generate` 生成）调 Go。输出文件名只在 Go 生成，页面用 `PreviewNames` 显示，因此摘要里的名字就是写盘的名字，包括同名时的 `-2`。
+前端只通过 `src/mygo.ts`（`mygo generate` 生成）调 Go。输出文件名只在 Go 生成，页面用 `PreviewNames` 显示，摘要显示预计文件名。最终写入使用系统的独占重命名操作，同名时保留已编码的临时文件，递增后缀后重试，并返回实际路径。Linux 上的目标文件系统若不支持独占重命名，会尝试在同一目录创建硬链接，保留已有的同名文件。Windows 支持本地和 UNC 长路径。
 
 ## 与原型一致的地方
 
@@ -37,7 +37,8 @@ bun run build        # build/darwin-arm64/PictureCut.app 和 .dmg
 - 每张图独立保存比例和裁切，参与开关只影响保存。
 - 质量档位与输出目录是整批共用设置，改动时写入 `~/Library/Application Support/PictureCut/settings.json`。
 - 拖入文件或文件夹时显示遮罩，松手后按 `ImportPaths` 导入。文件夹递归导入其中的 JPG/JPEG、PNG，文件夹里的隐藏项和非图片跳过；直接拖入的文件按能否解码判断。
-- 保存进度逐张上报，失败的文件在保存进度里显示红叉，完成页按实际写盘数量报数。原型没有失败态，这是唯一的新增样式。
+- 保存进度逐张上报，失败的文件在保存进度里显示红叉，完成页按实际写盘数量报数。有失败时可在完成页展开「查看失败文件」，逐张查看名称和原因。
+- 清空列表会调用 `ReleaseImages` 释放对应的导入记录和缩略图。单张移除后，撤销提示到期或被替换时才释放。
 
 原型里为了演示加的东西没有搬过来：假红绿灯（换成系统窗口按钮）、外层 `.page` 画框、隐藏的 `<input type=file>`、可编辑的输出路径输入框（改为点击选择目录）。工具栏加了拖动区域，并按系统窗口按钮的宽度留出左侧和右侧内边距。
 
